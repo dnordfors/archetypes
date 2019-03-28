@@ -31,10 +31,9 @@ You have 2 H1 headings. You may want to use the "H1 -> H2" option to demote all 
 
 for the Galvanize Data Science Interactive / g88 Q1 2019
 
-By David Nordfors 
-
-
-Repository on GitHub: https://github.com/dnordfors/galvanize-capstone
+<i>By David Nordfors </i>
+ <br> 
+<font size="1">https://github.com/dnordfors/galvanize-capstone </font>
 
 
 #  Using Data Science to Explore New Sources For Talent: A ShowCase

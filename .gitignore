@@ -1,0 +1,9 @@
+# gitignore
+data/*
+!data/census
+data/census/*
+!data/DoL
+data/DoL/*
+!**.ipynb
+!**.py
+!**.sh

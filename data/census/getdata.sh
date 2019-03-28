@@ -1,0 +1,9 @@
+curl -O https://www2.census.gov/programs-surveys/popest/geographies/2016/state-geocodes-v2016.xls
+curl -O https://www2.census.gov/programs-surveys/acs/tech_docs/pums/data_dict/PUMS_Data_Dictionary_2017.csv
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_pca.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_pfl.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_ptx.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_pdc.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_pid.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_poh.zip
+curl -O https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/csv_ppa.zip
