@@ -1,0 +1,159 @@
+
+#%%
+
+# path to working directory
+path = '/Users/davidnordfors/galvanize/galvanize-capstone/final'
+
+# IMPORT LIBRARIES
+## OS
+import os
+os.chdir(path)
+
+## I/O
+import zipfile
+import requests
+import pickle
+
+# MANAGE
+import pandas as pd
+import numpy as np
+from collections import Counter
+from boolma import BM
+
+## FIT
+from sklearn.model_selection import cross_validate
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn import linear_model
+
+## GRAPHICS
+from matplotlib import pyplot as plt
+import seaborn as sns
+sns.set(rc={'figure.figsize':(11.7,8.27)})
+
+def dist_boxplot(x, **kwargs):
+    ax = sns.distplot(x, hist_kws=dict(alpha=0.2))
+    ax2 = ax.twinx()
+    sns.boxplot(x=x, ax=ax2)
+    ax2.set(ylim=(-5, 5))
+
+
+#%% READ DATA:
+# CENSUS PUMS DATA DICTIONARY
+datadic = pd.read_csv("./data/PUMS_Data_Dictionary_2017.csv").drop_duplicates()
+
+# Occupation name corresponding to SOCP number
+def socp_name(socc):
+    return datadic[datadic['Record Type']== str(socc)]['Unnamed: 6'].values[0]
+
+
+# %% # CENSUS DATA
+# census = pd.read_csv(
+#     zipfile.ZipFile('./data/csv_pca.zip').extract(
+#         'psam_p06.csv')
+# )
+workers = BM(census[['AGEP','DEAR','DEYE','DIS','FOD1P','FOD2P',
+                'SCHL','SOCP','WAGP','WKHP']]).select(
+                        'WAGP','gt',20000).select(
+                        'WKHP','gt',20).df
+
+workers.to_pickle('./data/pickle/workers_California.pkl')
+
+
+workers = pd.read_pickle('data/pickle/pums_California.pkl')
+workers['log FTE'] = workers['FTE wage'].apply(np.log)
+groupby = workers.groupby('SOCP') 
+occupations = groupby.mean()[['AGEP', 'FTE wage','log FTE']]
+occupations['SOCP'] = occupations.index
+occupations['SOCP_shave'] = occupations['SOCP'].apply(soc)
+occupations['Occupation'] = occupations['SOCP'].apply(socp_name)
+
+
+
+
+#%% WAGE DISTRIBUTION
+# The overall wage distribution has a long right tail, but the wage distribution
+# for each occupation is, on average, centered around the middle. 
+
+
+
+# OCCUPATIONAL ATTRIBUTES
+#%% O*NET DATABASE import values
+
+onet = {}
+
+def from_onet(qualities):
+        if qualities in onet:
+                return onet[qualities]
+        pickle_exists = os.path.isfile('./data/pickle/'+qualities+'.pkl')
+        if pickle_exists:
+                onet[qualities] = pd.read_pickle('./data/pickle/'+qualities+'.pkl')
+                return onet[qualities]
+        else: 
+                onet[qualities]= pd.read_excel(
+                        zipfile.ZipFile('./data/db_23_2_excel.zip').extract(
+                        'db_23_2_excel/'+qualities+'.xlsx'))
+                onet[qualities].to_pickle('./data/pickle/'+qualities+'.pkl')
+                return onet[qualities]
+
+
+
+def soc(socc):
+    code = str(socc).replace('-','')
+    return code[:5]
+
+
+# Attributes for occupations
+def matrix(qualities):
+        df_at = from_onet(qualities)
+        if qualities in ['Abilities','Knowledge','Skills']:
+                df_at = df_at[df_at['Scale Name']=='Level']
+        elif qualities in ['Work Context']:
+                df_at = df_at[df_at['Category']==5.0]
+        dfat1 = df_at[['O*NET-SOC Code','Element Name','Data Value']]
+        aaa = pd.get_dummies(dfat1['Element Name'])
+        dfmat = dfat1[['O*NET-SOC Code']].join(aaa.multiply(dfat1['Data Value'],axis = "index")).groupby('O*NET-SOC Code').sum()
+        dfmat = dfmat.apply(lambda col: (col - col.mean())/col.std())
+        dfmat['SOCP'] = dfmat.index
+        dfmat['SOCP']=dfmat['SOCP'].apply(lambda soc : str(soc).replace('-','')[:6])
+        return dfmat
+
+
+# Merge occupation attributes from ONET and census 
+
+
+def fit_model(qualities,census,model,ylab='log FTE'):
+        merged = census[[ylab]].merge(matrix(qualities).groupby('SOCP_shave').mean(),left_index=True,right_on='SOCP')
+        y = merged[ylab]
+        X = merged.drop(columns=[ylab])
+        result = cross_validate(model, X, y, cv=3, return_estimator=True)
+        return result
+
+
+#%%
+
+
+
+
+
+#%%
+
+#%%
+
+
+
+
+#dkn = from_onet('Knowledge')
+#dsk = from_onet('Skills')
+#dwc = from_onet('Work Context')
+#din = from_onet('Interests')
+
+
+
+
+
+
+
+#%%

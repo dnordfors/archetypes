@@ -1,9 +1,6 @@
 # gitignore
 data/*
-!data/census
-data/census/*
-!data/DoL
-data/DoL/*
+final/data/*
 !**.ipynb
 !**.py
 !**.sh
