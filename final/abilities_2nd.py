@@ -70,7 +70,32 @@ def soc(socc):
     code = str(socc).replace('-','')
     return code[:6]
 
-# CENSUS DATA: select workers in ages 40 - 65 and discard the occupations with large standard deviations.
+# CENSUS DATA: 
+#%% PUMS Data dictionary
+#Source: https://www.census.gov/programs-surveys/acs/data/pums.html )
+datadic = pd.read_csv("./data/PUMS_Data_Dictionary_2017.csv").drop_duplicates()
+
+# rows including the string 'word'
+def var_about(word):
+    return pd.concat((BM(datadic).select('Record Type', 'contains',word).df,
+                      BM(datadic).select('Unnamed: 6', 'contains',word).df))
+
+# Name of occupation for SOCP number
+def socp_name(socc):
+    return datadic[datadic['Record Type']== str(socc)]['Unnamed: 6'].values[0]
+
+tits = from_onet('Alternate Titles')
+all_SOCP = set(tits['O*NET-SOC Code'])
+
+
+def lookup_title(socc):
+    soccn = socc[:2]+'-'+socc[2:]+'.00'
+    if soccn in all_SOCP:
+        return tits[tits['O*NET-SOC Code']== soccn].iloc[0].get('Title')
+    else:
+        return 'NaN'
+        
+#%% select workers in ages 40 - 65 and discard the occupations with large standard deviations.
 all_workers = pd.read_pickle('data/pickle/pums_California.pkl')
 workers = BM(all_workers).select(
             'AGEP','gt',40).select(
@@ -101,9 +126,23 @@ def matrix(features):
 
 def xy(features,occupations):
     #Normalizes occupation matrix
-    foo = matrix(features)
+    #foo = matrix(features)
+    foo = features
     occ_features_norm = (foo - foo.mean())/foo.std()
     
+
+    # Normalize y:  Census/PUMS log FTE wages   
+    foo = occupations[['SOCP_shave','Occupation','FTE wage','log FTE']].copy()
+    foo['log FTE'] =norm(occupations['log FTE'])
+
+    # Merge and align X & y for occupations
+    fit_data = foo.merge(occ_features_norm,left_on='SOCP_shave',right_index=True)
+    
+    # Return X & y
+    y = fit_data['log FTE']
+    X = fit_data.drop(columns = ['SOCP_shave', 'Occupation', 'FTE wage', 'log FTE'])
+    return (X,y)
+
 
     # Normalize y:  Census/PUMS log FTE wages   
     foo = occupations[['SOCP_shave','Occupation','FTE wage','log FTE']].copy()
@@ -131,46 +170,25 @@ def prepare(df):
     df = df[df['Scale ID'] == sid]
 
     return df[['O*NET-SOC Code','Element Name','Data Value']]
-        
+    
 
 dab = prepare(from_onet('Abilities'))
 dkn = prepare(from_onet('Knowledge'))
 dsk = prepare(from_onet('Skills'))
 din = prepare(from_onet('Interests'))
 
-featuresets = [dab,dkn,dsk,din]
 featurenames = ['Abilities','Knowledge','Skills','Interests']
 
+# Put them all together in one big feature matrix
+dall = pd.concat([matrix(dab),matrix(dsk),matrix(dkn)],axis = 1)
+
 #%% MODEL & FIT
-
-reg_ridge = linear_model.Ridge(alpha=.5)
-rf = RandomForestRegressor(n_estimators=40,
-                           max_features='auto',
-                           random_state=0)
-
-
-fit = {}
-feat = {}
-result = {}
-Xy_test= {}
-n=3
-for ft in range(len(featuresets)):
-    X, y = xy(featuresets[ft],occupations)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=40)
-    Xy_test[ft]=(X_test,y_test)
-    res = cross_validate(reg_ridge,X_train, y_train, cv=n, return_estimator=True)
-    res_rf = cross_validate(rf,X_train, y_train, cv=n, return_estimator=True)
-    result[ft] = (res,res_rf,boo)
-    feat[ft] = pd.DataFrame(res['estimator'][0].coef_,index=X.columns)
-    for i in range(n):
-        feat[ft][i] = pd.DataFrame(res['estimator'][i].coef_,index=X.columns)
-    feat[ft]['mean'] = feat[ft].mean(axis=1)
-    feat[ft]['std'] = feat[ft].std(axis=1)
 
 
 # CLUSTER FEATURES INTO OCCUPATION CATEGORIES
 # Use non-zero matrix factorization for clustering
 # Use singular value decomposition first state for determining overall similarity
+
 
 class OnetCluster:
     def __init__(self,X,n):
@@ -182,24 +200,57 @@ class OnetCluster:
         self.h = self.model.components_
         self.f = pd.DataFrame(self.h,columns=X.columns)
         self.fn = nrmcol(self.f.T).T
+    
 
 
-class SVD:
+class Svd:
     def __init__(self,X):
         self.u,self.s,self.vt = svd(np.array(X))
-        self.pvt = pd.DataFrame(self.vt,columns=X.columns)
-        self.pu = pd.DataFrame(self.u,columns=X.index)
-
+        self.f = pd.DataFrame(self.vt,columns=X.columns)
+        self.o = pd.DataFrame(self.u,columns=X.index)
         
 def nrmcol(df):
     return df / np.sqrt(np.diagonal(df.T @ df))
 
-#%%
-clst = {}
-for k in range(len(featuresets)):
-    clst[k]={}
-    for l in range(1,6):
-        clst[k][l]=OnetCluster(matrix(featuresets[k]),l)
+
+#Select PUMS data for occupations in an OnetCluster. 
+#Default threshold set to 0.7: only occupations with at least 0.49 of their weight in the cluster are included. 
+
+def clocc(n_order,m_cluster,thresh = 0.7):
+    soccs = clcat[n_order][m_cluster][clcat[n_order][m_cluster] > thresh]
+    cloccs = soccs.merge(occupations,left_index=True, right_index=True).dropna()
+    return cloccs
 
 
-#%%
+# Create the matrix of all features
+
+
+
+
+reg_ridge = linear_model.Ridge(alpha=.5)
+rf = RandomForestRegressor(n_estimators=40,
+                           max_features='auto',
+                           random_state=0)
+
+featuresets = [OnetCluster(dall,i).o for i in [12]]
+
+Xt={}
+yt = {}
+test_fit={}
+coefs = {}
+for ft in range(len(featuresets)):
+    test_fit[ft] = {}
+    coefs[ft] = {}
+    X, y = xy(featuresets[ft],occupations)
+    for sed in range(2000):      
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        Xt[ft],yt[ft]=X_test,y_test
+        res = cross_validate(reg_ridge,X_train, y_train, cv=3, return_estimator=True)
+        #res = cross_validate(rf,X_train, y_train, cv=n, return_estimator=True)
+        #res = cross_validate(lasse,X_train, y_train, cv=n, return_estimator=True)
+        test_fit[ft][sed]= [res['estimator'][j].score(X_test,y_test) for j in range(3)]
+        coefs[ft][sed]= np.array([res['estimator'][j].coef_ for j in range(3)])
+    coefs[ft]['pd'] = pd.DataFrame(np.concatenate(np.array(list(coefs[ft].values()))))
+
+def coefficients(n):
+    return pd.DataFrame([coefs[n]['pd'].mean(),coefs[n]['pd'].std()],index=['mean','std']).T.sort_values('mean',ascending=False)
