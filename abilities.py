@@ -1,7 +1,8 @@
+s
 
 #%%
 # path to working directory
-path = '/Users/davidnordfors/galvanize/galvanize-capstone/final'
+path = '/Users/davidnordfors/galvanize/galvanize-capstone'
 
 # IMPORT LIBRARIES
 ## OS
@@ -232,7 +233,8 @@ rf = RandomForestRegressor(n_estimators=40,
                            max_features='auto',
                            random_state=0)
 
-featuresets = [OnetCluster(dall,i).o for i in [12]]
+featuresets = [OnetCluster(dall,i).o for i in [6]]
+
 
 Xt={}
 yt = {}
@@ -252,5 +254,27 @@ for ft in range(len(featuresets)):
         coefs[ft][sed]= np.array([res['estimator'][j].coef_ for j in range(3)])
     coefs[ft]['pd'] = pd.DataFrame(np.concatenate(np.array(list(coefs[ft].values()))))
 
+# The coefficients for the n'th featureset fitted above
 def coefficients(n):
     return pd.DataFrame([coefs[n]['pd'].mean(),coefs[n]['pd'].std()],index=['mean','std']).T.sort_values('mean',ascending=False)
+
+# In the example above we have only one featureset: OnetCluster(dall,6)
+# The entire featurespace has been reduced to 6 dimensions, by NMF clustering
+resfeat = coefficients(0).merge(OnetCluster(dall,6).fn,left_index=True,right_index=True)
+result_features = {}
+for i in range(len(resfeat)):
+    result_features[i] = resfeat.iloc[i].sort_values(ascending=False)[:10]
+
+aaa = OnetClusters(dall,6)
+bbb = aaa.on.copy()
+bbb['SOCP_shave'] = bbb.index
+bbb['Title'] = bbb['SOCP_shave'].apply(lookup_title)
+aaa.ont = bbb
+ccc = aaa.ont.set_index(aaa.ont['Title'])
+resocc = coefficients(0).merge(ccc.T,left_index=True,right_index=True)
+
+result_occupations = {}
+for i in range(len(result_occupations)):
+    result_occupations[i] = resocc.iloc[i].sort_values(ascending=False)[:10]
+
+
