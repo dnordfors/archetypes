@@ -1,3 +1,5 @@
 # gitignore
-final
+oldfinal
 old
+*zip
+*pkl
