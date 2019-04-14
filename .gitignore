@@ -1,5 +1,7 @@
 # gitignore
 oldfinal
 old
-*zip
-*pkl
+*.zip
+*.pkl
+*.csv
+*.xlsx
