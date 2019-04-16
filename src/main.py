@@ -1,8 +1,23 @@
-s
 
 #%%
+# # 
+# OCCUPATIONAL ARCHETYPES 
+# Purpose: A tool for people and organizations to discuss, analyze, predict, strategize on the job market. 
+#
+# Data Sources:
+# - Occupation data: O*NET
+# - People data: Census ACS/PUMS
+#
+# ## What this codes does
+# - Creates occupational archetypes from a matrix of occupations and festures (abilities, skills, knowledge, etc.)
+# - Selects a demography from census
+# - Calculates labor market statistics, economic indicators for the archetypes with regards to the demography
+# - Evaluate the predictive power of the Archtypes: 
+#       - select a target (yearly full-time equivalent wage)
+#       - fit features to target: compare Archetypes vs original features.
+# 
 # path to working directory
-path = '/Users/davidnordfors/galvanize/galvanize-capstone'
+# path = '/Users/davidnordfors/galvanize/galvanize-capstone/src'
 
 # IMPORT LIBRARIES
 ## OS
@@ -32,20 +47,13 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 sns.set(rc={'figure.figsize':(11.7,8.27)})
 
-def dist_boxplot(x, **kwargs):
-    ax = sns.distplot(x, hist_kws=dict(alpha=0.2))
-    ax2 = ax.twinx()
-    sns.boxplot(x=x, ax=ax2)
-    ax2.set(ylim=(-5, 5))
-
-
 #%% DATA
 ## I/O
 import zipfile
 import requests
 import pickle
 
-# Normalization function
+# Normalization function for pandas
 def norm(vec):
     return (vec-vec.mean())/vec.std()
 
