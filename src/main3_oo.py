@@ -42,18 +42,48 @@ import pickle
 
 ## FUNCTIONS AND CLASSES
 
+# BOOLEAN MASKIBG - CLASS OBJECT
+# BM - Boolean Masking
+class BM:
+        '''
+        ***TO BE REPLACED BY BOOLEAN MASKING 'AND' STATEMENTS - SEE BELOW
+        Boolean masking of Pandas.DataFrames. Start and end with BM(df)........df
+        (Can be expanded to SQL with additional code)
+        Example
+                BM(df).select('My_Column','equals','foo').select(
+                         'Other_Column','contains','bar').select(
+                        'Yet_another','gt',5).df
+        df[ (df['a'] == foo)
+                & (df['b'] == bar)
+                & (df['c'] > 5)]
+        '''
+    def  __init__(self,df):
+        self.df= df
+    
+    def select( self, column , operator , value):
+        if operator ==  "equals":
+            return BM(self.df[self.df[column]==value])
+        elif operator == "contains":
+            return BM(self.df[[(value.lower() in str(title).lower()) for title in self.df[column]]])
+        elif operator ==  "gt":
+            return BM(self.df[self.df[column] > value])
+        elif operator ==  "ge":
+            return BM(self.df[self.df[column] >= value])
+        elif operator ==  "lt":
+            return BM(self.df[self.df[column] <= value])
+        elif operator ==  "le":
+            return BM(self.df[self.df[column] <= value])
+        elif operator ==  "ne":
+            return BM(self.df[self.df[column] != value])
+
+
+
 # Normalization function
 def norm(vec):
     '''
     Normalizes a vector v-v.mean())/v.std() - works for: PandasDataFrame.apply(norm)
     '''
     return (vec-vec.mean())/vec.std()
-
-def nrmcol(df):
-    '''
-    Normalizes the columns of a DataFrame (cos distance)
-    '''
-    return df / np.sqrt(np.diagonal(df.T @ df))
 
 # READ FROM O*NET DATABASE. 
 onet = {}
@@ -87,7 +117,7 @@ def soc(socpnr,shave=5):
     return socp_shave
 
 # CENSUS DATA: 
-# PUMS Data dictionary
+#%% PUMS Data dictionary
 #Source: https://www.census.gov/programs-surveys/acs/data/pums.html )
 datadic = pd.read_csv("./data/PUMS_Data_Dictionary_2017.csv").drop_duplicates()
 
@@ -106,7 +136,7 @@ def socp_name(socc):
 
 tits = from_onet('Alternate Titles')
 all_SOCP = set(tits['O*NET-SOC Code'])
-aaa = tits[['O*NET-SOC Code','Title']].copy()
+aaa = tits[['O*NET-SOC Code','Title']]
 aaa['O*NET-SOC Code'] = aaa['O*NET-SOC Code'].apply(soc)
 looktit = dict(aaa.values)
 
@@ -115,64 +145,73 @@ def lookup_title(socpnr):
 
 
 
-#
-class   Onet:
-    def __init__(self,features):
-        self.features = features
-        self.data = from_onet(features)
-        self.matrix = self.construct_matrix()
-   
-    def construct_matrix(self):
-        '''
-        Reshapes O*NET occupation/feature matrix to a regular matrix of N_occupations x M_features. Used as X for fitting. 
-        '''
-        prepdata = self.prepare()
-        foo = pd.get_dummies(prepdata['Element Name']) 
-        occ_prepdata = prepdata[['O*NET-SOC Code']].join(foo.multiply(prepdata['Data Value'],axis = "index")).groupby('O*NET-SOC Code').sum()
-        occ_prepdata['SOCP'] = occ_prepdata.index
-        occ_prepdata['SOCP_shave']=occ_prepdata['SOCP'].apply(soc)
-        # Group by census/PUMS SOC codes (SOCP_shave)
-        occ_prepdata_compounded= occ_prepdata.groupby('SOCP_shave').mean()
-        occ_prepdata_compounded['SOCP_shave'] = occ_prepdata_compounded.index   
-        foo = occ_prepdata_compounded.drop(columns='SOCP_shave')
-        return foo
-  
- # Prepare Matrix construction
-    def prepare(self):
-        '''
-        Preprocesses O*Net data for shaping the features x occupations matrix (used as X)
-        '''
-        df = self.data
-        # For Abilities, Knowledge, Skills
-        if 'LV' in set(df['Scale ID']):
-            sid = 'LV'
-        # For Interests
-        elif 'OI' in set(df['Scale ID']):
-            sid = 'OI'
-        df = df[df['Scale ID'] == sid]
-        return df[['O*NET-SOC Code','Element Name','Data Value']] 
+#%%  CREATE X:features from O*NET; and y: mean wages from census/pums
 
-class   Census:
-
-    def __init__(self,state = 'California'):
-        self.state = state
-        self.data = pd.read_pickle('data/pickle/pums_'+state+'.pkl')
-        self.workers_occupations()
+def matrix(features):
+    '''
+    Reshapes O*NET occupation/feature matrix to a regular matrix of N_occupations x M_features. Used as X for fitting. 
+    '''
+    foo = pd.get_dummies(features['Element Name']) 
+    occ_features = features[['O*NET-SOC Code']].join(foo.multiply(features['Data Value'],axis = "index")).groupby('O*NET-SOC Code').sum()
+    occ_features['SOCP'] = occ_features.index
+    occ_features['SOCP_shave']=occ_features['SOCP'].apply(soc)
+    # Group by census/PUMS SOC codes (SOCP_shave)
+    occ_features_compounded= occ_features.groupby('SOCP_shave').mean()
+    occ_features_compounded['SOCP_shave'] = occ_features_compounded.index   
+    foo = occ_features_compounded.drop(columns='SOCP_shave')
+    return foo
 
 
-    def workers_occupations(self,age_low = 40, age_high = 65, std_max = 0.5, socp_granularity = 5):
-        self.workers = self.data[
-                            (self.data['AGEP'] >= age_low) &
-                            (self.data['AGEP'] <= age_high)
-                        ]
-        self.workers['log FTE'] = self.workers['FTE wage'].apply(np.log)
-        self.workers['SOCP_shave'] = self.workers['SOCP'].apply(lambda socpnr: soc(socpnr,socp_granularity))
-        foo = self.workers.groupby('SOCP_shave') 
-        self.occupations = foo.mean()[['AGEP', 'FTE wage','log FTE']]
-        self.occupations['count'] = foo.count()['AGEP']
-        self.occupations['std log FTE'] = foo.std()['log FTE']
-        self.occupations['Occupation'] = self.occupations.index
-        self.occupations_select = self.occupations[self.occupations['std log FTE'] < std_max]
+
+# SELECT FEATURE SETS FROM O*NET, FIT FOR O*NET FTE WAGES 
+
+# Prepare feature sets.
+def prepare(df):
+    '''
+    Preprocesses O*Net data for shaping the features x occupations matrix (used as X)
+    '''
+    # For Abilities, Knowledge, Skills
+    if 'LV' in set(df['Scale ID']):
+        sid = 'LV'
+    # For Interests
+    elif 'OI' in set(df['Scale ID']):
+        sid = 'OI'
+    df = df[df['Scale ID'] == sid]
+
+    return df[['O*NET-SOC Code','Element Name','Data Value']]
+    
+class   Xy:
+        def     __init__(self,onet,census):
+                self.onet = from_onet(onet)
+                self.census = census
+
+        def onet_prep(self):
+            '''
+            Preprocesses O*Net data for shaping the features x occupations matrix (used as X)
+            '''
+            # For Abilities, Knowledge, Skills
+            if 'LV' in set(self.onet['Scale ID']):
+                sid = 'LV'
+            # For Interests
+            elif 'OI' in set(self.onet['Scale ID']):
+                sid = 'OI'
+            df = self.onet[self.onet['Scale ID'] == sid]
+            return df[['O*NET-SOC Code','Element Name','Data Value']]
+        
+        def matrix(self):
+            '''
+            Reshapes O*NET occupation/feature matrix to a regular matrix of N_occupations x M_features. Used as X for fitting. 
+            '''
+            features = self.onet_prep()
+            foo = pd.get_dummies(features['Element Name']) 
+            occ_features = features[['O*NET-SOC Code']].join(foo.multiply(features['Data Value'],axis = "index")).groupby('O*NET-SOC Code').sum()
+            occ_features['SOCP'] = occ_features.index
+            occ_features['SOCP_shave']=occ_features['SOCP'].apply(soc)
+            # Group by census/PUMS SOC codes (SOCP_shave)
+            occ_features_compounded= occ_features.groupby('SOCP_shave').mean()
+            occ_features_compounded['SOCP_shave'] = occ_features_compounded.index   
+            foo = occ_features_compounded.drop(columns='SOCP_shave')
+            self.onetm = foo
 
 
 
@@ -200,14 +239,6 @@ class Xfit:
                 my_fit.features_importances        – Dictionary: feature_importances for all fits (for estimators with '.feature_importance_' as an attribute )
                 my_fit.feature_importance          – Pandas.DataFrame: the average feature importances and standard deviations.           
     '''
-    from sklearn.model_selection import train_test_split
-    from sklearn.model_selection import cross_validate
-    from sklearn.model_selection import cross_val_score
-    from sklearn import linear_model
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.ensemble import GradientBoostingRegressor
-    import xgboost as xgb  
-
     def __init__(self,X,y,regressor = xgb.XGBRegressor(),itr = 10, xval = 3):      
         # FITTING
         n = xval  
@@ -252,31 +283,26 @@ class Xfit:
 # Use non-zero matrix factorization for clustering
 # Use singular value decomposition first state for determining overall similarity
 
+# dwa = prepare(from_onet('Work Activities'))
+# dwv = from_onet('Work Values')
+# dwv = dwv[dwv['Scale Name'] == 'Extent'][['O*NET-SOC Code','Element Name','Data Value']]
+
+#class OnetCluster:
 class Archetypes:
     '''
-    Archetypes: Performs NMF of order n on X and stores the result as attributes. 
+    O*Net Archetypes: Performs NMF of order n on X and stores the result as attributes. 
     '''
     def __init__(self,X,n):
-        self.n = n
         self.X = X
         self.model = NMF(n_components=n, init='random', random_state=0, max_iter = 1000, tol = 0.0000001)
         self.w = self.model.fit_transform(X)
         self.o = pd.DataFrame(self.w,index=X.index)
         self.on = nrmcol(self.o.T).T
-        self.occ = self.on.copy()
-        self.occ['Occupations'] = self.occ.index
-        self.occ['Occupations'] = self.occ['Occupations'].apply(lookup_title)
-        self.occ = self.occ.set_index('Occupations')
+        self.ont = self.on.reset_index()['SOCP_shave'].apply(lookup_title)
         self.h = self.model.components_
         self.f = pd.DataFrame(self.h,columns=X.columns)
         self.fn = nrmcol(self.f.T).T
         
-    def plot_features(self): 
-        sns.clustermap(self.fn.apply(lambda x: x**2).T,figsize=(self.n, self.X.shape[1]/3.5),method = 'single')
-
-    def plot_occupations(self):
-        sns.clustermap(self.occ.apply(lambda x: x**2),figsize=(self.n, self.X.shape[0]/3.5),method = 'single',z_score = 0)
-
 
 class Svd:
     ''''
@@ -291,19 +317,44 @@ class Svd:
         self.f = pd.DataFrame(self.vt,columns=X.columns)
         self.o = pd.DataFrame(self.u,columns=X.index)
         
+def nrmcol(df):
+    '''
+    Normalizes the columns of a DataFrame (cos distance)
+    '''
+    return df / np.sqrt(np.diagonal(df.T @ df))
 
 
-
-def plo(onet_matrix,n):
+def plo(onet,n):
     '''
      preliminary 
     '''
-    df = Archetypes(onet_matrix,n).on.apply(np.square)
+    df = Archetypes(matrix(onet),n).on.apply(np.square)
     df['Title'] = df.index
     df['Title'] = df['Title'].apply(lookup_title)
     df = df.merge(occupations[['FTE wage','count']].astype(int),left_index = True, right_on='SOCP_shave')
     return df
     
+
+
+def plf(onet,n):
+    '''
+    preliminary
+    '''
+    sns.clustermap(Archetypes(matrix(onet),n).fn.apply(lambda x: x**2).sort_values(
+    1,axis=1,ascending = False).T,figsize=(2*n, 16),method = 'single')
+
+
+def lsa(X,y):
+    '''
+    Least-Squares Approximation - matrix algebra
+    '''
+    xtx = X.T @ X
+    xty = X.T @ y
+    xtx_inv = pd.DataFrame(np.linalg.pinv(xtx.values), xtx.columns, xtx.index)
+    k = xtx_inv @ xty
+    return k
+
+
 
 
 
@@ -328,25 +379,39 @@ if __name__ == "__main__":
 
 
 
-    ## CENSUS DATA
-    # select workers in ages 40 - 65 and discard the occupations with large standard deviations.
+## CENSUS DATA
+#%% select workers in ages 40 - 65 and discard the occupations with large standard deviations.
+all_workers = pd.read_pickle('data/pickle/pums_California.pkl')
+workers = BM(all_workers).select(
+            'AGEP','gt',40).select(
+            'AGEP','lt',65).df
+workers['log FTE'] = workers['FTE wage'].apply(np.log)
+workers['SOCP_shave'] = workers['SOCP'].apply(soc)
+foo = workers.groupby('SOCP_shave') 
 
-    census = Census('California')
+all_occupations = foo.mean()[['AGEP', 'FTE wage','log FTE']]
+all_occupations['count'] = foo.count()['AGEP']
+all_occupations['std log FTE'] = foo.std()['log FTE']
+all_occupations['Occupation'] = all_occupations.index
+occupations = all_occupations[all_occupations['std log FTE']<0.50]
 
-    ## ONET DATA
+## ONET DATA
 
-    ab = Onet('Abilities')
-    kn = Onet('Knowledge')
-    sk = Onet('Skills')
+dab = prepare(from_onet('Abilities'))
+dkn = prepare(from_onet('Knowledge'))
+dsk = prepare(from_onet('Skills'))
+din = prepare(from_onet('Interests'))
 
-    # Put them all together in one big feature matrix
-    dall = pd.concat([ab.matrix,sk.matrix,kn.matrix],axis = 1)
+featurenames = ['Abilities','Knowledge','Skills','Interests']
+
+# Put them all together in one big feature matrix
+dall = pd.concat([matrix(dab),matrix(dsk),matrix(dkn)],axis = 1)
 
 
-    ## ESTIMATORS
-    rid = linear_model.Ridge(alpha=.5)
-    rf = RandomForestRegressor(n_estimators=40,
-                            max_features='auto',
-                            random_state=0)
-    boo = GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=None, max_features=None, alpha=0.9, verbose=0, max_leaf_nodes=None, warm_start=False, presort='auto', validation_fraction=0.1, n_iter_no_change=None, tol=0.0001)
-    xboo = xgb.XGBRegressor()
+## ESTIMATORS
+rid = linear_model.Ridge(alpha=.5)
+rf = RandomForestRegressor(n_estimators=40,
+                           max_features='auto',
+                           random_state=0)
+boo = GradientBoostingRegressor(loss='ls', learning_rate=0.1, n_estimators=100, subsample=1.0, criterion='friedman_mse', min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_depth=3, min_impurity_decrease=0.0, min_impurity_split=None, init=None, random_state=None, max_features=None, alpha=0.9, verbose=0, max_leaf_nodes=None, warm_start=False, presort='auto', validation_fraction=0.1, n_iter_no_change=None, tol=0.0001)
+xboo = xgb.XGBRegressor()
