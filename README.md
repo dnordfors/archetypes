@@ -4,7 +4,14 @@
 David Nordfors        
 Github: dnordfors
 
-## The Challenge: Grasping the Rapidly Changing Job Market and the Value of Talent 
+## IN THIS REPOSITORY
+- ./data : Initially empty
+- ./src : 
+    - Archetypes.py Code package
+    - getdata.sh Shell command for importing data from O*Net and US census
+
+## CHALLENGE: JOBS ARE CHANGING FAST. CONFUSION FOLLOWS.
+
 Well paid jobs require abilities, skills and knowledge. The O*Net database maps the profiles for a wealth of occupations. Wages of people working in these occupations is available in the US Census ACS/PUMS database. With all the data available, top quality research and huge economic resources being put into human resources, still **only one out of twenty people have a job that fits them and that engages them**. The world's most important industry – the one that billions of people to work – has merely a *five percent* success rate. This is beyond a matter of lacking resources, there must be structural deficiencies. I am suggesting it lacks the language for analysing, strategizing and executing on goals.   
 
 We are used to looking at what jobs require from people. But that is not working as well as it used to. Occupations are changing or disappearing at a high speed and confusion follows. 
@@ -74,21 +81,28 @@ The quality of the fit is shown here, for four and eight archetypes, respectivel
 
 !['Archetypes'](images/predicted_wages.png)
 
-## CONCLUSIONS AND SUGGESTED NEXT STEPS
+The regression was done with XGBoost, a method that often wins Kaggle-competitions. It ranks the importance of the variables for the fit, as shown below. The importances should be seen in perspective of the four-archetype set predicting merely a third of the variation in wages.
+
+!['Archetypes'](images/feature_importance.png)
+
+
+
+## CONCLUSIONS AND NEXT STEPS
 
 Conclusions
 
-- Archetypes for the labormarket can be created from  O*net and Census,
-- Archetypes can be constructed to match demographics and regions.
-- Archetypes is a tool for designing and automating analytics
-- Archetypes have predictive power
+- **Relevant, updatable Archetypes for the labor market can be created from  O*net and Census databases**
+- **Archetypes are tailored to demographics by constructing them from subsets of the US Census data**,
+- **Analytics are conveniently designed and automated**. 
+- **Archetypes have higher predictive power than the original variables in the O*Net database**. 
 
 Next steps:
 
-- Build a web-app
-- Find more data sources
-- Explore more analytics
-- Explore predictive powers
-- Test archetypes in HR, for improving communication within teams.
-- Match archetypes with profiled users, test for education and job search. 
+- Build a web-app that can adapt to demographics and offers a selection of analytis.
+- Expand the data to all relevant variables in O*Net and Census. 
+- Add data sources, such as job postings, where abilities can be donnected to occupations through natural language processing. 
+- Explore predictive powers and identify suitable fitting methods.
+- Test using archetypes in HR teams, as a tool for improving their collective intelligence and shaping powerful common language.
+- Explore matching people and occupations, by matching personal profiles with the archetypes. 
+- Explore recommending training and education that leverages personal abilities to match occupations and raise wages. 
 <!-- Docs to Markdown version 1.0β17 -->
