@@ -83,6 +83,8 @@ The quality of the fit is shown here, for four and eight archetypes, respectivel
 
 The regression was done with XGBoost, a method that often wins Kaggle-competitions. It ranks the importance of the variables for the fit, as shown below. The importances should be seen in perspective of the four-archetype set predicting merely a third of the variation in wages.
 
+NOTE: 'Feature Importance' does not mean 'raises the wage', it says how important the feature is for predicting the wage. In this present case, the more 'muscular' occupations have the lowest wages on average, the 'brainy' jobs have the highest. 
+
 !['Archetypes'](images/feature_importance.png)
 
 
