@@ -1,5 +1,5 @@
 # gitignore
-final
+workspace
 old
 *.zip
 *.pkl
