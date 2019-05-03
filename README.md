@@ -48,15 +48,20 @@ The archetypes' relation to abilities is mirrored by their relation to occupatio
 
 !['Archetypes'](images/two_archetypes_occupations.png)
 
-## ARCHETYPE ANALYTICS
+## ARCHETYPE ANALYTICS EXAMPLE
 
 The figures above include an addition to the Onet data: the number of people who practice each occupation. This is demographic information from the US census ACS/PUMS database. They are for Californians between ages 40-65.
 
-The number of archetypes is entirely a question of choice. Here I have chosen to divide all workers into four archetypes, which I have given suitable nicknames. The algorithm divides Californian workers' occupations into clusters with similar abilities. 
+The number of archetypes is entirely a question of choice. Here I  chose four archetypes, which I have given suitable nicknames. The algorithm constructs clusters based on how different occupations require different abilities (from O*net), weighted by how many Californians are engaged in these occupations (from Census). Occupations are interconnected by abilities, and abilities are interconnected by occupations. The archetypes are clusters of abilities and occupations interconnecting each other.  
 
 !['Archetypes'](images/four_archetypes.png)
 
-Archetype statistics and analytics can be automatically generated from the combined of O*Net and Census ACS/PUMS data. Here are examples of stats generated for the archetypes above. As expected, 'brainy'jobs pay better than jobs that are about being strong or quick. 
+Archetype statistics and analytics can be automatically generated from the combined of O*Net and Census ACS/PUMS data. Here are examples of stats generated for the archetypes above. Here are examples of occupations and how much they belong to each archetype:
+
+
+!['Archetypes'](images/four_jobs.png)
+
+'Brainy'jobs pay, on averagem, better than jobs that are about being strong or quick. 
 
 !['Archetypes'](images/four_archetypes_wages.png)
 
@@ -75,7 +80,7 @@ Here below is the comparison. The R^2-score approximates how much of the varianc
 
 I compare using a number of archetypes with an equal number of sampled abilities. The archetypes perform much better. Eight archetypes is the optimal set of variables for the present data, managing to predict roughly half of wage differences. The set of four archetypes that I have shown above is not as good, but it still has a predictive power for wages close to one-third, and it's simplicity makes it an efficient tool for spoken conversation about abilities and the labor market. 
 
-!['Archetypes'](images/r2_scores.png)
+!['Archetypes'](images/predictive_power.png)
 
 The quality of the fit is shown here, for four and eight archetypes, respectively. 
 
