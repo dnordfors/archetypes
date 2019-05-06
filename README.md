@@ -12,7 +12,7 @@ Github: dnordfors
 
 ## CHALLENGE: JOBS ARE CHANGING FAST. CONFUSION FOLLOWS.
 
-Well paid jobs require abilities, skills and knowledge. The O*Net database maps the profiles for a wealth of occupations. Wages of people working in these occupations is available in the US Census ACS/PUMS database. With all the data available, top quality research and huge economic resources being put into human resources, still **only one out of twenty people have a job that fits them and that engages them**. The world's most important industry – the one that billions of people to work – has merely a *five percent* success rate. This is beyond a matter of lacking resources, there must be structural deficiencies. I am suggesting it lacks the language for analysing, strategizing and executing on goals.   
+Well paid jobs require abilities, skills and knowledge. The O*Net database maps the profiles for a wealth of occupations. Wages for these occupations can be found in the US Census ACS/PUMS database. Despite all the available data available, top quality research and huge economic resources in HR, still **only one out of twenty people have a job that fits them and that engages them**. The world's most important industry – the one that matches billions of people with jobs – has merely a *five percent* success rate (source: Gallup). This is beyond a matter of lacking resources, there must be structural deficiencies. I am suggesting it lacks the language for analysing, strategizing and executing on goals.   
 
 We are used to looking at what jobs require from people. But that is not working as well as it used to. Occupations are changing or disappearing at a high speed and confusion follows. 
 
@@ -61,13 +61,13 @@ Archetype statistics and analytics can be automatically generated from the combi
 
 !['Archetypes'](images/four_jobs.png)
 
-'Brainy'jobs pay, on averagem, better than jobs that are about being strong or quick. 
+'Brainy'jobs pay, on average, better than jobs that are mainly about being strong or quick. 
 
 !['Archetypes'](images/four_archetypes_wages.png)
 
 The 'handy' archetype is not included, because all jobs are less than 50% 'handy'. In the O*Net database, there are two broad 'handy' occupations that reach the mark: silver smiths and tailors, but apparently there are too few of them in the California statistics to be visible in the plot. 
 
-This is just one example; the opportunity to design statistics are endless and they will automatically adapt to the choice of arhetypes. 
+This is just one example; the opportunity to design statistics are endless and they will automatically adapt to the choice of archetypes. 
 
 
 ## USING ARCHETYPES FOR MAKING PREDICTIONS 
