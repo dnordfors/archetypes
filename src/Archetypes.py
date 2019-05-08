@@ -1,3 +1,6 @@
+## ARCHETYPES
+# original code by David Nordfors (2019)
+
 #%%
 
 # path to working directory
