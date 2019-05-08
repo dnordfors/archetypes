@@ -38,7 +38,7 @@ The construction of Archetypes has two steps.
 
 ## 1. BUILDING THE ARCHETYPES      
 
-The archetypes are constructed by applying NMF (Non-zero matrix factorization), a method that generally can be used for sorting data into 'topics', to the O*Net database. The number of Archetypes is set by choice. 
+The archetypes are constructed by applying NMF (Non-negative matrix factorization), a method that generally can be used for sorting data into 'topics', to the O*Net database. The number of Archetypes is set by choice. 
 
 Here, the data in the Onet database, shown here above, has been reconstructed into two archetypes, which might be labeled "body" and "mind", because of the way the abilities cluster. The abilities of each archetype are normalized, their intensities sum up to one. 
 
