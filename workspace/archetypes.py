@@ -89,6 +89,11 @@ def norm_dot(vec, weights = False):
     
     return vec / np.sqrt(vec @ vec)
 
+def scale(vec, weights = False):
+    stop_divide_by_zero = 0.00000001
+    if weights:
+        return (vec.max()-vec.min() + stop_divide_by_zero)
+    return (vec-vec.min())/(vec.max()-vec.min() + stop_divide_by_zero)
 
 ### SELECTION 
 def is_string(a):
