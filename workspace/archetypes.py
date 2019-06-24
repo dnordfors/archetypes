@@ -285,23 +285,6 @@ class Onet:
             print('*** Complete')
         return self.matrix_dic[label,xx,yy,socp_shave,data_value,scale_name,norm][show]
     
-    def n_matrix(self,label, 
-                 norm = 'stat', 
-                 xx = 'Element Name',  yy = 'SOCP_shave' ,data_value = 'Data Value', scale_name = 'Level',
-                 axis = 1, socp_shave = 6):
-        '''
-        Converts onet dataset into a normalized matrix 
-        xx          - matrix columns
-        yy          - matrix index
-        scale_name  - value category 
-        data_value  - data values
-        socp_shave  - number of digits in 'shaved' SOCP number
-        norm        - type of normalization
-        axis        - axis of normalization
-        '''
-        norm_type = {'stat': norm_stat, 'dot' : norm_dot }
-        mat = self.matrix(label,data_value = data_value , scale_name = scale_name, socp_shave = socp_shave)
-        return mat.apply(norm_type[norm],axis = axis)
        
 # Instantiate Onet() as 'onet'
 onet = Onet()            
@@ -426,8 +409,10 @@ class Archetypes:
         self.h = self.model.components_
         self.f = pd.DataFrame(self.h,columns=X.columns)
         self.fn =self.f.T.apply(norm_dot).T
+        self.plot_occupations_dic ={}
+        self.plot_features_dic ={}
         
-    def plot_features(self,fig_scale = (1,3.5),metric='cosine', method = 'single'): 
+    def plot_features(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = True): 
         '''
         Plot Archetypes as x and features as y. 
         Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
@@ -442,11 +427,24 @@ class Archetypes:
         For other hyperparameters, see seaborn.clustermap
      
         '''
-        sns.clustermap(np.square(self.fn),robust = True, z_score=0,figsize=(
-            self.X.shape[1]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)
+        param = (fig_scale,metric,method,vertical)
+        if param in self.plot_features_dic.keys():
+            fig = self.plot_features_dic[param]
+            return fig.fig
+
+        df = np.square(self.fn)
+
+        if vertical:
+            fig = sns.clustermap(df.T,robust = True, z_score=1,figsize=(
+                self.n/fig_scale[0],self.X.shape[1]/fig_scale[1]),method = method,metric = metric)        
+        else: # horizontal
+            fig = sns.clustermap(df,robust = True, z_score=0,figsize=(
+                self.X.shape[1]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)        
+        self.features_plot = fig
+        return fig
 
 
-    def plot_occupations(self,fig_scale = (1,3.5),metric='cosine', method = 'single'):
+    def plot_occupations(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = True):
         '''
         Plot Archetypes as x and occupations as y. 
         Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
@@ -460,9 +458,21 @@ class Archetypes:
         
         For other hyperparameters, see seaborn.clustermap
      
-        '''   
-        sns.clustermap(np.square(self.occ).T, figsize=(
-            self.X.shape[0]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)
+        '''
+        param = (fig_scale,metric,method,vertical)
+        if param in self.plot_occupations_dic.keys():
+            fig = self.plot_occupations_dic[param]
+            return fig.fig
+
+        df = np.square(self.occ)
+        if vertical:
+            fig = sns.clustermap(df, figsize=(
+                self.n/fig_scale[0],self.X.shape[0]/fig_scale[1]),method = method,metric = metric)
+        else: # horizontal
+            fig = sns.clustermap(df.T, figsize=(
+                self.X.shape[0]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)
+        self.plot_occupations_dic[param] = fig
+        return fig.fig
 
         
 class Xfit:
