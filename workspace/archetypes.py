@@ -115,6 +115,27 @@ def is_string(a):
     return isinstance(a,str)
 
 
+def in_common(step):
+    df = pd.DataFrame(np.array([ix,np.roll(ix,step)]).T)
+    df['and'] = tts & np.roll(tts,step)
+    return df
+
+### NLP
+
+def drop_stopwords(wordvec,language='English'):
+    wv = np.array(wordvec)
+    stw = np.array(stopwords.words(language))
+    without_stopwords = wv[[not word in stw for word in wv]]
+    return without_stopwords
+
+def lemmatize(wordvec):
+    return [lemmatizer.lemmatize(word) for word in wordvec ]
+
+def nlp_prep(string):
+    wordvec = tokenizer.tokenize(string.lower())
+    return lemmatize(drop_stopwords(wordvec))
+    
+
 ## CLASSES
 
 ### DATA DICTIONARY 
@@ -201,8 +222,6 @@ class Onet:
         self.source = source
         self.dataset = {}
         self.matrix_dic = {}
-
-        self.socp_titles = onet.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
         
         zip_file = path + '/'+ name +'.zip'
         onet_exists = os.path.isfile(zip_file)
@@ -215,6 +234,15 @@ class Onet:
         
         self.zip = zipfile.ZipFile(zip_file)
         self.tocdf = self.make_toc()
+
+        self.socp_titles = onet.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
+        title_vec = self.socp_titles['Title'].apply(nlp_prep)
+        self.socp_titles['title_vec'] = title_vec.apply(set)
+        # tt = onet.socp_titles.set_index('SOCP_shave')
+        # tts = np.array(tt['title_vec'].apply(set))
+        # ix = tt.index.values
+        # corr = pd.concat([in_common(n) for n in range(len(ix))])
+        # self.corr_mat = corr.set_index([0,1]).unstack()
     
     def make_toc(self,sep ='.'):
         '''
