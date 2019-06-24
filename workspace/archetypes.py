@@ -38,6 +38,14 @@ import pickle
 import urllib.request
 from tqdm import tqdm
 
+## NLP
+import nltk
+lemmatizer = nltk.stem.WordNetLemmatizer()
+from nltk.corpus import stopwords
+set(stopwords.words('english'))
+from nltk.tokenize import RegexpTokenizer
+tokenizer = RegexpTokenizer(r'\w+')
+
 class DownloadProgressBar(tqdm):
     def update_to(self, b=1, bsize=1, tsize=None):
         if tsize is not None:
@@ -89,6 +97,8 @@ def norm_dot(vec, weights = False):
     
     return vec / np.sqrt(vec @ vec)
 
+# 
+# Scaled Normalization 
 def scale(vec, weights = False):
     stop_divide_by_zero = 0.00000001
     if weights:
@@ -191,6 +201,8 @@ class Onet:
         self.source = source
         self.dataset = {}
         self.matrix_dic = {}
+
+        self.socp_titles = onet.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
         
         zip_file = path + '/'+ name +'.zip'
         onet_exists = os.path.isfile(zip_file)
