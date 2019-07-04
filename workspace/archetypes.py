@@ -1,4 +1,5 @@
 #%%
+#%%
 
 # IMPORT LIBRARIES
 
@@ -8,6 +9,7 @@ import os
 # MANAGE
 import pandas as pd
 import numpy as np
+import scipy
 
 ## FIT
 from sklearn.model_selection import train_test_split
@@ -115,27 +117,6 @@ def is_string(a):
     return isinstance(a,str)
 
 
-def in_common(step):
-    df = pd.DataFrame(np.array([ix,np.roll(ix,step)]).T)
-    df['and'] = tts & np.roll(tts,step)
-    return df
-
-### NLP
-
-def drop_stopwords(wordvec,language='English'):
-    wv = np.array(wordvec)
-    stw = np.array(stopwords.words(language))
-    without_stopwords = wv[[not word in stw for word in wv]]
-    return without_stopwords
-
-def lemmatize(wordvec):
-    return [lemmatizer.lemmatize(word) for word in wordvec ]
-
-def nlp_prep(string):
-    wordvec = tokenizer.tokenize(string.lower())
-    return lemmatize(drop_stopwords(wordvec))
-    
-
 ## CLASSES
 
 ### DATA DICTIONARY 
@@ -222,6 +203,8 @@ class Onet:
         self.source = source
         self.dataset = {}
         self.matrix_dic = {}
+
+        self.socp_titles = self.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
         
         zip_file = path + '/'+ name +'.zip'
         onet_exists = os.path.isfile(zip_file)
@@ -234,15 +217,6 @@ class Onet:
         
         self.zip = zipfile.ZipFile(zip_file)
         self.tocdf = self.make_toc()
-
-        self.socp_titles = onet.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
-        title_vec = self.socp_titles['Title'].apply(nlp_prep)
-        self.socp_titles['title_vec'] = title_vec.apply(set)
-        # tt = onet.socp_titles.set_index('SOCP_shave')
-        # tts = np.array(tt['title_vec'].apply(set))
-        # ix = tt.index.values
-        # corr = pd.concat([in_common(n) for n in range(len(ix))])
-        # self.corr_mat = corr.set_index([0,1]).unstack()
     
     def make_toc(self,sep ='.'):
         '''
@@ -308,6 +282,9 @@ class Onet:
         data_value  - data values
         socp_shave  - number of digits in 'shaved' SOCP number
         show        - output matrix shows 'mean'(default), 'std' or 'count' (relevant for groupby socp_shave)
+        norm        - columns are normalized: 'norm = norm_dot'  [ col/sqrt(col@col) ] 
+                                              'norm = norm_stat' [ (col - col.mean) / col.std ] 
+                                         
         '''
         if not (label,xx,yy,socp_shave,data_value,scale_name,norm) in self.matrix_dic.keys():
             print('*** Matrix not in dictionary. Constructing....')
@@ -407,13 +384,46 @@ class   Census:
 census = Census()
 
 
-#%%
+# # Xy - matrix
+class Xy:
+    def __init__(self,demographics,features):
+        self.d = demographics
+        self.f = features
+        self.xy_dic = {}
+        self.x_dic = {}
+        self.y_dic = {}
+        
+        
+    def func(self,fun):
+        return self.fun()
+    
+    def xy(self,y_label):
+        if not y_label in self.xy_dic.keys():
+            merged = pd.merge(self.d[['SOCP_shave',y_label]],self.f,
+                         left_on = 'SOCP_shave',right_index=True)
+            self.xy_dic[y_label] = merged.groupby('SOCP_shave').sum()
+            self.x_dic[y_label] =  self.xy_dic[y_label].drop(y_label, axis =1)
+            self.y_dic[y_label] =  self.xy_dic[y_label][y_label]
+        return self.xy_dic[y_label]
+    
+    def x(self,y_label):
+        if not y_label in self.x_dic.keys():
+            self.xy(y_label)
+        return self.x_dic[y_label]
+    
+    def y(self,y_label):
+        if not y_label in self.x_dic.keys():
+            self.xy(y_label)
+        return self.y_dic[y_label]
+            
+        
 
 # # MATRIX-FACTORIZATION: DIMENSIONALITY REDUCTION & ARCHETYPING
 
 # ## CLUSTER FEATURES INTO OCCUPATION CATEGORIES
 # ## Use non-zero matrix factorization for clustering
 # ## Use singular value decomposition first state for determining overall similarity
+
 
 class Archetypes:
     '''
@@ -602,6 +612,36 @@ class Svd:
         
 
 
+###################
+
+def drop_stopwords(wordvec,language='English'):
+    wv = np.array(wordvec)
+    stw = np.array(stopwords.words(language))
+    without_stopwords = wv[[not word in stw for word in wv]]
+    return without_stopwords
+
+def lemmatize(wordvec):
+    return [lemmatizer.lemmatize(word) for word in wordvec ]
+
+def nlp_prep(string):
+    wordvec = tokenizer.tokenize(string.lower())
+    return np.array(lemmatize(drop_stopwords(wordvec)))
 
 
+#def word_matrix(df_col):
+
+    
+
+
+
+title_vec = onet.socp_titles['Title'].apply(nlp_prep)
+onet.socp_titles['title_vec'] = title_vec
+onet.socp_titles['title_vec']
+
+tt = onet.socp_titles.set_index('SOCP_shave')[['title_vec']]
+keywords = np.array(list(set(tt['title_vec'].apply(list).sum())))
+df = pd.DataFrame(index = keywords, columns = tt.index)
+for socp,keyw in tt['title_vec'].to_dict().items():
+    df[socp].loc[keyw]=1
+sp = scipy.sparse.csr_matrix(df.fillna(0))
 #%%
