@@ -1,5 +1,4 @@
 #%%
-#%%
 
 # IMPORT LIBRARIES
 
@@ -8,8 +7,11 @@ import os
 
 # MANAGE
 import pandas as pd
+pd.options.mode.chained_assignment = None  # default='warn'
+
 import numpy as np
 import scipy
+import collections
 
 ## FIT
 from sklearn.model_selection import train_test_split
@@ -334,7 +336,8 @@ class   Census:
     
     '''
 
-    def __init__(self,path = paths['census'], name = 'census', 
+    def __init__(self,path = paths['census'], 
+                 name = 'census', 
                  source = 'https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/'):
         self.path = path
         self.name = name
@@ -360,6 +363,9 @@ class   Census:
 
     # Create and execute shell command fetching state census zip-file 
     def import_from_source(self,state):
+        '''
+        Imports ACS/PUMS dataset from US Census online, URL: my_census.source
+        '''
         print('*** Downloading '+state+' ACS/PUMS dataset from US Census...')
         state_abbr = datadic.state_to_abbrev.get(state,state)
  #       shcmd = "curl -o "+self.path+'/'+self.name+"_tmp.zip -O "+ self.source +self.state_zipfile_name(state_abbr)
@@ -376,47 +382,91 @@ class   Census:
         return 
 
     def state_zipfile_name(self,state_abbr):
+        '''
+        Input: State name abbreviation. Returns census-convention name of zipped csv-file
+        '''
         return 'csv_p'+state_abbr.lower()+'.zip'
-
-
+    
 
 # Instantiate Census() as 'census'
 census = Census()
 
-
 # # Xy - matrix
-class Xy:
-    def __init__(self,demographics,features):
-        self.d = demographics
-        self.f = features
-        self.xy_dic = {}
-        self.x_dic = {}
+class MakeXy:
+    '''
+    MakeXy is an object containing a combination of census and onet data
+    
+    my_makeXy = MakeXy(my_census,my_onet)
+    
+    my_makeXy.Xy(y_label)     : Merges my_census and my_onet with 'SOCP_shave' (occupational code)
+                                as common variable and my_census[y_label] as target variable, and groups: 
+                                my_make.Xy(y_label) = merged.groupby('SOCP_shave').sum() 
+    my_makeXy.X(y_label)      : X-matrix / independent variables
+    my_makeXy.y(y_label)      : y-matrix / target
+    
+    '''
+    def __init__(self,census,onet):
+        self.census = census
+        self.onet = onet
+        self.Xy_dic = {}
+        self.X_dic = {}
         self.y_dic = {}
         
-        
-    def func(self,fun):
-        return self.fun()
     
-    def xy(self,y_label):
-        if not y_label in self.xy_dic.keys():
-            merged = pd.merge(self.d[['SOCP_shave',y_label]],self.f,
+    def Xy(self,y_label):
+        '''
+        Merges my_census and my_onet with 'SOCP_shave' (occupational code) as common variable and 
+        my_census[y_label] as target variable, and groups: my_make.Xy(y_label) = merged.groupby('SOCP_shave').sum() 
+        '''
+        if not y_label in self.Xy_dic.keys():
+            merged = pd.merge(self.census[['SOCP_shave',y_label]],self.onet,
                          left_on = 'SOCP_shave',right_index=True)
-            self.xy_dic[y_label] = merged.groupby('SOCP_shave').sum()
-            self.x_dic[y_label] =  self.xy_dic[y_label].drop(y_label, axis =1)
-            self.y_dic[y_label] =  self.xy_dic[y_label][y_label]
-        return self.xy_dic[y_label]
+            self.Xy_dic[y_label] = merged.groupby('SOCP_shave').sum()
+            self.X_dic[y_label] =  self.Xy_dic[y_label].drop(y_label, axis =1)
+            self.y_dic[y_label] =  self.Xy_dic[y_label][y_label]
+        return self.Xy_dic[y_label]
     
-    def x(self,y_label):
-        if not y_label in self.x_dic.keys():
-            self.xy(y_label)
-        return self.x_dic[y_label]
+    def X(self,y_label):
+        '''
+        X-matrix / independent variables 
+        '''
+        if not y_label in self.X_dic.keys():
+            self.Xy(y_label)
+        return self.X_dic[y_label]
     
     def y(self,y_label):
-        if not y_label in self.x_dic.keys():
-            self.xy(y_label)
+        '''
+        y-matrix / target
+        '''
+        if not y_label in self.y_dic.keys():
+            self.Xy(y_label)
         return self.y_dic[y_label]
-            
-        
+
+    
+def Xyzzy(
+        state,
+        state_cols = ['WAGP','WKHP'],
+        onet_set   = 'Abilities',
+        fte        = {'fulltime':40,'min_hours':15,'min_fte':0}, 
+        socp_shave = 6,
+        norm       = scale
+         ):
+    '''
+    MakeXy wizard. 
+    '''
+    census_cols = ['SOCP_shave'] + state_cols
+    my_census   = census.data(state, socp_shave = socp_shave)[census_cols]
+    my_onet     = onet.matrix(onet_set,socp_shave = socp_shave, norm = norm)
+    if fte:
+        c0 = my_census.dropna()
+        c1 =  c0[
+                        c0['WKHP'] >= fte['min_hours']
+                        ]
+        c1['fte'] = fte['fulltime']*c1['WAGP']/c1['WKHP']
+        my_census = c1[c1['fte']>=fte['min_fte']] 
+    return MakeXy(my_census,my_onet)
+
+
 
 # # MATRIX-FACTORIZATION: DIMENSIONALITY REDUCTION & ARCHETYPING
 
@@ -604,11 +654,32 @@ class Svd:
         my_svd.u/.s/.vt – U S and VT from the Singular Value Decomposition (see manual)
         my_svd.f        – Pandas.DataFrame: f=original features x svd_features
         my_svd.o        - Pandas.DataFrame: o=occupations x svd_features
+        my_svd.volume(keep_volume) 
+                        - collections.namedtuple ('dotted dicionary'): 
+                          Dimensionality reduction. keeps 'keep_volume' of total variance
+                          
+                          
     '''
     def __init__(self,X):
         self.u,self.s,self.vt = svd(np.array(X))
         self.f = pd.DataFrame(self.vt,columns=X.columns)
         self.o = pd.DataFrame(self.u,columns=X.index)
+        
+    def volume(self,keep_volume):
+        ''' 
+        Dimensionality reduction, keeps 'keep_volume' proportion of original variance
+        Type: collections.namedtuple ('dotted dictionary')
+        Examples of usage:
+        my_svd.volume(0.9).s - np.array: eigenvalues for 90% variance 
+        my_svd.volume(0.8).f - dataframe: features for 80% variance
+        my_svd.volume(0.5).o - dataframe: occupations for 50% variance      
+        '''
+        dotted_dic = collections.namedtuple('dotted_dic', 's f o')
+        a1 = self.s.cumsum()
+        a2 = a1/a1[-1]
+        n_max = np.argmin(np.square(a2 - keep_volume))
+        cut_dic = dotted_dic(s= self.s[:n_max],f= self.f.iloc[:n_max], o= self.o.iloc[:n_max])
+        return cut_dic
         
 
 
@@ -644,4 +715,5 @@ df = pd.DataFrame(index = keywords, columns = tt.index)
 for socp,keyw in tt['title_vec'].to_dict().items():
     df[socp].loc[keyw]=1
 sp = scipy.sparse.csr_matrix(df.fillna(0))
+
 #%%
