@@ -289,7 +289,7 @@ class Onet:
                                          
         '''
         if not (label,xx,yy,socp_shave,data_value,scale_name,norm) in self.matrix_dic.keys():
-            print('*** Matrix not in dictionary. Constructing....')
+            print('*** Onet matrix not in dictionary. Constructing....')
             columns = ['Scale Name',yy,xx] # Default columns
             grpb = self.data(label,socp_shave = socp_shave).groupby(columns)
             mat_mean   = grpb.mean().loc[scale_name][data_value].unstack()
