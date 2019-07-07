@@ -101,13 +101,25 @@ def norm_dot(vec, weights = False):
     
     return vec / np.sqrt(vec @ vec)
 
+# Algebraic normalization - dot product
+def norm_sum(vec, weights = False):
+    '''
+    Normalizes the columns of a DataFrame (dot product)
+    '''
+    if weights:
+        return  vec.sum()
+    
+    return vec / vec.sum()
+
 # 
-# Scaled Normalization 
+# Scaled Normalization -
 def scale(vec, weights = False):
     stop_divide_by_zero = 0.00000001
     if weights:
         return (vec.max()-vec.min() + stop_divide_by_zero)
     return (vec-vec.min())/(vec.max()-vec.min() + stop_divide_by_zero)
+
+
 
 ### SELECTION 
 def is_string(a):
@@ -398,76 +410,26 @@ class MakeXy:
     
     my_makeXy = MakeXy(my_census,my_onet)
     
-    my_makeXy.Xy(y_label)     : Merges my_census and my_onet with 'SOCP_shave' (occupational code)
+    my_makeXy.Xy     : Merges my_census and my_onet with 'SOCP_shave' (occupational code)
                                 as common variable and my_census[y_label] as target variable, and groups: 
                                 my_make.Xy(y_label) = merged.groupby('SOCP_shave').sum() 
-    my_makeXy.X(y_label)      : X-matrix / independent variables
-    my_makeXy.y(y_label)      : y-matrix / target
+    my_makeXy.X      : X-matrix / independent variables
+    my_makeXy.y      : y-matrix / target
     
     '''
-    def __init__(self,census,onet):
-        self.census = census
-        self.onet = onet
-        self.Xy_dic = {}
-        self.X_dic = {}
-        self.y_dic = {}
-        
-    
-    def Xy(self,y_label):
-        '''
-        Merges my_census and my_onet with 'SOCP_shave' (occupational code) as common variable and 
-        my_census[y_label] as target variable, and groups: my_make.Xy(y_label) = merged.groupby('SOCP_shave').sum() 
-        '''
-        if not y_label in self.Xy_dic.keys():
-            merged = pd.merge(self.census[['SOCP_shave',y_label]],self.onet,
+    def __init__(self,census,onet,y_label = 'fte'):
+        self.census  = census
+        self.onet    = onet
+        self.y_label = y_label
+        merged       = pd.merge(self.census[['SOCP_shave',self.y_label]],self.onet,
                          left_on = 'SOCP_shave',right_index=True)
-            self.Xy_dic[y_label] = merged.groupby('SOCP_shave').sum()
-            self.X_dic[y_label] =  self.Xy_dic[y_label].drop(y_label, axis =1)
-            self.y_dic[y_label] =  self.Xy_dic[y_label][y_label]
-        return self.Xy_dic[y_label]
-    
-    def X(self,y_label):
-        '''
-        X-matrix / independent variables 
-        '''
-        if not y_label in self.X_dic.keys():
-            self.Xy(y_label)
-        return self.X_dic[y_label]
-    
-    def y(self,y_label):
-        '''
-        y-matrix / target
-        '''
-        if not y_label in self.y_dic.keys():
-            self.Xy(y_label)
-        return self.y_dic[y_label]
+        self.Xy =  merged.groupby('SOCP_shave').sum()
+        self.X  =  self.Xy.drop(self.y_label, axis =1)
+        self.y  =  self.Xy[self.y_label]
+
+
 
     
-def Xyzzy(
-        state,
-        state_cols = ['WAGP','WKHP'],
-        onet_set   = 'Abilities',
-        fte        = {'fulltime':40,'min_hours':15,'min_fte':0}, 
-        socp_shave = 6,
-        norm       = scale
-         ):
-    '''
-    MakeXy wizard. 
-    '''
-    census_cols = ['SOCP_shave'] + state_cols
-    my_census   = census.data(state, socp_shave = socp_shave)[census_cols]
-    my_onet     = onet.matrix(onet_set,socp_shave = socp_shave, norm = norm)
-    if fte:
-        c0 = my_census.dropna()
-        c1 =  c0[
-                        c0['WKHP'] >= fte['min_hours']
-                        ]
-        c1['fte'] = fte['fulltime']*c1['WAGP']/c1['WKHP']
-        my_census = c1[c1['fte']>=fte['min_fte']] 
-    return MakeXy(my_census,my_onet)
-
-
-
 # # MATRIX-FACTORIZATION: DIMENSIONALITY REDUCTION & ARCHETYPING
 
 # ## CLUSTER FEATURES INTO OCCUPATION CATEGORIES
@@ -495,24 +457,25 @@ class Archetypes:
         my_archetypes.fn        - features x normalized archetypes matrix
         
     '''
-    def __init__(self,X,n):
+    def __init__(self,X,n,norm = norm_dot):
         self.n = n
         self.X = X
         self.model = NMF(n_components=n, init='random', random_state=0, max_iter = 1000, tol = 0.0000001)
         self.w = self.model.fit_transform(self.X)
         self.o = pd.DataFrame(self.w,index=self.X.index)
-        self.on = self.o.T.apply(norm_dot).T
+        self.on = self.o.T.apply(norm).T
         self.occ = self.on.copy()
         self.occ['Occupations'] = self.occ.index
 #        self.occ['Occupations'] = self.occ['Occupations'].apply(onet_socp_name)
         self.occ = self.occ.set_index('Occupations')
         self.h = self.model.components_
         self.f = pd.DataFrame(self.h,columns=X.columns)
-        self.fn =self.f.T.apply(norm_dot).T
+        self.fn =self.f.T.apply(norm).T
         self.plot_occupations_dic ={}
         self.plot_features_dic ={}
+
         
-    def plot_features(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = True): 
+    def plot_features(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = False): 
         '''
         Plot Archetypes as x and features as y. 
         Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
@@ -544,7 +507,7 @@ class Archetypes:
         return fig
 
 
-    def plot_occupations(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = True):
+    def plot_occupations(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = False):
         '''
         Plot Archetypes as x and occupations as y. 
         Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
@@ -562,6 +525,7 @@ class Archetypes:
         param = (fig_scale,metric,method,vertical)
         if param in self.plot_occupations_dic.keys():
             fig = self.plot_occupations_dic[param]
+            #return
             return fig.fig
 
         df = np.square(self.occ)
@@ -572,6 +536,7 @@ class Archetypes:
             fig = sns.clustermap(df.T, figsize=(
                 self.X.shape[0]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)
         self.plot_occupations_dic[param] = fig
+        #return
         return fig.fig
 
         
@@ -683,7 +648,7 @@ class Svd:
         
 
 
-###################
+## NLP UNDER DEVELOPMENT #################
 
 def drop_stopwords(wordvec,language='English'):
     wv = np.array(wordvec)
@@ -716,4 +681,115 @@ for socp,keyw in tt['title_vec'].to_dict().items():
     df[socp].loc[keyw]=1
 sp = scipy.sparse.csr_matrix(df.fillna(0))
 
+
+
+##### Macro function
+
+    
+class Xyzzy:
+    
+    def __init__(self,
+            state,
+            state_cols = ['WAGP','WKHP'],
+            fte        = {'fulltime':40,'min_hours':15,'min_fte':0}, 
+            y_label    = 'fte',
+            X_label    = 'Abilities',
+            socp_shave = 6,
+            norm       = norm_dot
+             ):
+        '''
+        MakeXy / Archetypes wizard. 
+        '''
+        self.state = state
+        self.y_label = y_label
+        self.X_label = X_label
+        self.socp_shave = socp_shave
+        self.fte     = fte
+        
+        self.onet     = onet.matrix(self.X_label,socp_shave = socp_shave, norm = norm)
+        
+        census_cols = ['SOCP_shave'] + state_cols
+        self.cols   = census_cols
+        self.census   = census.data(self.state,  socp_shave = socp_shave)[self.cols]
+        if fte:
+            c0 = self.census.dropna()
+            c1 =  c0[
+                            c0['WKHP'] >= fte['min_hours']
+                            ]
+            c1['fte'] = fte['fulltime']*c1['WAGP']/c1['WKHP']
+            self.census = c1[c1['fte']>=fte['min_fte']] 
+        self.make_Xy = MakeXy(self.census,self.onet,y_label = self.y_label)
+        self.X   = self.make_Xy.X
+        self.y   = self.make_Xy.y
+        self.Xy  = self.make_Xy.Xy
+        
+        self.svd = Svd(self.X)
+        
+        self.archetypes_dic ={}
+        
+        
+    def archetypes(self,n,norm=norm_dot):
+        if n not in self.archetypes_dic.keys():
+            self.archetypes_dic[(n,norm)] = Archetypes(self.X,n,norm=norm)
+        return self.archetypes_dic[(n,norm)]
+    
+
+    
+    def arch_dot(self,arch_n1, arch_n2, n_arch , kind = 'features'):
+        tr =   {'features'    : self.svd.f, 
+                'occupations' : self.svd.o }
+        arch = {'features'    : self.archetypes(n_arch).f, 
+                'occupations' : self.archetypes(n_arch).o.T }
+
+        artr_1 = arch[kind].iloc[arch_n1] @ tr[kind].T
+        artr_2 = arch[kind].iloc[arch_n2] @ tr[kind].T
+
+        return artr_1 @ artr_2
+        
+
+
+
+#######################
+
+
 #%%
+if __name__ == "__main__":  
+   
+    abstract = ''' 
+     OCCUPATIONAL ARCHETYPES 
+     Purpose: A tool for people and organizations to discuss, analyze, predict, 
+     strategize on the job market. 
+
+     Data Sources:
+     - Occupation data: O*NET
+     - Demographic data: Census ACS/PUMS
+
+     ## What this codes does
+     - Creates occupational archetypes from a matrix of occupations and festures 
+       (abilities, skills, knowledge, etc.)
+     - Selects a demography from census
+     - Calculates labor market statistics, economic indicators for the archetypes 
+       with regards to the demography
+     - Evaluate the predictive power of the Archtypes: 
+           - select a target (yearly full-time equivalent wage)
+           - fit features to target: compare Archetypes vs original features. 
+    ''' 
+    # print(abstract) # un-comment to print abstract to output
+ 
+    print('Example demographic: People in Maine working more than 15 hours per week. \n'
+        'Occupation code granularity socp_shave = 6')
+
+    xy = Xyzzy('Maine', 
+                y_label  = 'fte',
+                X_label  ='Abilities',  
+                fte      ={'fulltime': 40, 'min_hours': 15, 'min_fte': 0},  
+                socp_shave=6
+              )
+
+    xy.archetypes(4).plot_features()
+    plt.title('Clustering: Archetypal Abilities')
+    plt.show()
+
+    xy.archetypes(4).plot_occupations()
+    plt.title('Clustering: Occupations projected onto Archetypal Abilities')
+    plt.show()
