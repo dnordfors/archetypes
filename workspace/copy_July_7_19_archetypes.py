@@ -687,39 +687,6 @@ sp = scipy.sparse.csr_matrix(df.fillna(0))
 
     
 class Xyzzy:
-    '''
-    Xyzzy is a 'front-end for the back-end' and pipeline for the archetypes package. 
-    Its purpose is to simplify the archetypal analysis of labor markets, where the US Census ACS/PUMS database 
-    is used for mapping demographics with social and economic variables onto occupations, such 
-    as ages and incomes of workers in a specific demographic, and where the O-net database 
-    is used for mapping occupations onto variables, such as knowledge, skills or abilities. 
-
-    Xyzzy was not designed to be a macro command language but the door can be kept open ;)
-    
-    #### Hyper parameters:
-    
-    state       : [str ] For census.data(state), e.g. 'California' or 'CA'. 
-    state_cols  : [list] columns to include from census, default value ['WAGP','WKHP'] 
-                    - wage & work hours per week. (definitions in census data dictionary)
-    fte         : [dict] Unless 'fte=False', 'fte' column (full-time wage equivalent) is added 
-                    to the census data. Requires ['WAGP','WKHP']. 
-                    Drops rows not fulfilling screeing requirements 'min_hours' and 'min_fte'
-                    Dictionary keys:
-                        'fulltime'  - work hours for fulltime        (default 40)
-                        'min_hours' - minimum nweekly hours required (default 15)
-                        'min_fte'   - minimum fte wage required      (default 0)
-    y_label     : [str] Name of census target variable/column
-    X_label     : [str] Name of O-net set of variables 
-    socp_shave  : [int] occupational number length. Sets granularity of occupations.
-    norm        : [function] Function for normalizing the X-matrix, can be (but not restricted to) 
-                    norm_dot  norm(vec) @ norm(vec) = 1 
-                    norm_stat norm(vec).mean = 0 ; norm(vec).std = 1
-                    norm_sum  norm(vec).sum = 1
-                    scale     norm(vec).min=0 ; norm(vec).max=1
-  
-    
-    
-    '''
     
     def __init__(self,
             state,
@@ -782,6 +749,9 @@ class Xyzzy:
 
 
 
+#######################
+
+
 #%%
 if __name__ == "__main__":  
    
@@ -805,13 +775,9 @@ if __name__ == "__main__":
            - fit features to target: compare Archetypes vs original features. 
     ''' 
     # print(abstract) # un-comment to print abstract to output
-    
-    ####################
-    # ARCHETYPE PLOTS  
-    ####################
  
-    print('*** Example demographic: People in Maine working more than 15 hours per week. \n\n'
-        '*** Occupation code granularity socp_shave = 6 \n')
+    print('Example demographic: People in Maine working more than 15 hours per week. \n'
+        'Occupation code granularity socp_shave = 6')
 
     xy = Xyzzy('Maine', 
                 y_label  = 'fte',
@@ -819,119 +785,13 @@ if __name__ == "__main__":
                 fte      ={'fulltime': 40, 'min_hours': 15, 'min_fte': 0},  
                 socp_shave=6
               )
-    
-    print('*** Clustering: Archetypes mapped onto Abilities')
+
     xy.archetypes(4).plot_features()
+    plt.title('Clustering: Archetypal Abilities')
     plt.show()
 
-    print('*** Clustering: Occupations mapped onto Archetypes')
     xy.archetypes(4).plot_occupations()
+    plt.title('Clustering: Occupations projected onto Archetypal Abilities')
     plt.show()
-    
 
-#%% QQQ  CODE BELOW NEEDS TO BE ADAPTED - SOURCE: Archetypes_test_4.ipynb
-    
-    ####################
-    # INCOME COMPARISONS
-    ####################
-    
-    labs = {0: '> 50% STRONG', 1: '> 50% BRAINY', 2: '> 50% QUICK', 3: '> 50% HANDY'}
-    colrs = {0:'darkorange',1:'cornflowerblue',2:'salmon',3:'g'}
-
-    sns.set(rc={'figure.figsize':(11.7,5.27)})
-    sns.set_context("notebook", font_scale=2, rc={"lines.linewidth": 2.5})
-    [sns.distplot(dabwc.fte[dabwc.fte[i] > 0.7]['log FTE'],label = labs[i],rug = False, 
-                  hist=False,kde_kws={ "bw": 0.11,'shade':True,'color' : colrs[i]}) for i in [0,1,2]]
-    plt.xlabel('YEARLY WAGE (LOG USD)')
-    plt.ylabel('')
-    plt.title('CALIFORNIA: WAGE STATISTICS FOR OCCUPATIONS')
-    
-    
-    
-    ###########################
-    # INCOME PREDICTIONS - Xfit
-    ###########################    
-    
-
-    # Fitting, with Archetypes as basis set
-
-    nitr=100
-    #n_arch = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,36,52]
-    n_arch = [2,4,8,52]
-    arall = {}
-    arall_X = {}
-    arall_y = {} 
-    arall_xfit ={}
-    for n in n_arch:
-        arall[n]=Archetypes(ab.wmatrix,n)
-        arall_X[n] = arall[n].on.merge(census.occupations[['log FTE']],left_index = True,right_index = True)
-        arall_y[n] = arall_X[n].pop('log FTE')
-        arall_xfit[n] = Xfit(arall_X[n],arall_y[n],itr=nitr)
-
-    r2scores = pd.DataFrame([np.concatenate([pd.DataFrame(arall_xfit[n].y_predict[i]).T.apply(
-        lambda ypred: r2_score(arall_xfit[n].y_test[i],ypred)) for i in range(nitr)]) for n in n_arch],
-                index = n_arch).T
-    r2score = pd.DataFrame([r2scores.mean(),r2scores.std()],index = ['mean R^2 score','std']).T
-    r2score   
-    
-    # Fitting, with sampled Abilities as basis set
-
-    nitr=100
-    #n_arch = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,36,52]
-    n_arch = [2,4,8,52]
-    rX = nrmcol(ab.wmatrix).merge(census.occupations[['log FTE']],left_index=True,right_index=True)
-    ry = rX.pop('log FTE')
-    xfit ={}
-    for n in n_arch:
-        xfit[n] = Xfit(rX,ry,itr=nitr,Xsamples=n)
-
-    r2scores2 = pd.DataFrame([np.concatenate([pd.DataFrame(xfit[n].y_predict[i]).T.apply(
-        lambda ypred: r2_score(xfit[n].y_test[i],ypred)) for i in range(nitr)]) for n in n_arch],
-                index = n_arch).T
-    r2score2 = pd.DataFrame([r2scores2.mean(),r2scores2.std()],index = ['mean R^2 score','std']).T
-    r2score2   
-    
-    # Plot predictive power
-    
-    sns.set(rc={'figure.figsize':(11.7,5.27)})
-    sns.set_context("notebook", font_scale=1.7, rc={"lines.linewidth": 2.5})
-    sns.barplot(data = r2scores,color = 'lightgreen',label = 'Archetypes',capsize = .2)
-    sns.barplot(data = r2scores2,color = 'mediumseagreen', label = 'Abilities',capsize = .2)
-    plt.legend()
-    plt.xlabel('Number of variables')
-    plt.ylabel('R^2 score')
-    plt.title('PREDICTIVE POWER')
-    
-    # Plot predicted vs actual wages - 
-    
-    ## 4 Archetypes
-
-    nn = 4
-    ypred = pd.concat([pd.DataFrame(arall_xfit[nn].y_predict[i]).T for i in range(100)])
-    ytest = np.concatenate([arall_xfit[nn].y_test[i].values for i in range(100)])
-    ypred['ytest'] = ytest
-    predactual_fte = pd.DataFrame(np.concatenate([ypred[[i,'ytest']].values 
-                                                  for i in range(3)]),columns = ['Predicted Wage','Actual Wage'])
-    sns.jointplot(x = 'Predicted Wage',y='Actual Wage',data= predactual_fte,kind='hex')
-    
-    
-    ## 8 Archetypes 
-    
-    nn = 8
-    ypred = pd.concat([pd.DataFrame(arall_xfit[nn].y_predict[i]).T for i in range(100)])
-    ytest = np.concatenate([arall_xfit[nn].y_test[i].values for i in range(100)])
-    ypred['ytest'] = ytest
-    predactual_fte = pd.DataFrame(np.concatenate([ypred[[i,'ytest']].values 
-                                                  for i in range(3)]),columns = ['Predicted Wage','Actual Wage'])
-sns.jointplot(x = 'Predicted Wage',y='Actual Wage',data= predactual_fte,kind='hex')
-
-
-    # Plot feature importances (4 Archetypes)
-    
-    sns.set(rc={'figure.figsize':(11.7,5.27)})
-    sns.set_context("notebook", font_scale=2, rc={"lines.linewidth": 2.5})
-    data = pd.concat([pd.DataFrame(arall_xfit[4].feature_importances[i],columns = ['Strong','Brainy','Quick','Handy']) for i in range(100)])
-    sns.barplot(data=data,orient = 'horizontal',capsize = .2,color = 'salmon')
-    plt.ylabel('\nARCHETYPE')
-    plt.xlabel('\nXGBOOST FEATURE IMPORTANCE')
-    plt.title('PREDICTED INFLUENCE ON WAGE SETTING\n')
+#%%
