@@ -51,13 +51,13 @@ import pickle
 import urllib.request
 from tqdm import tqdm
 
-## NLP
-import nltk
-lemmatizer = nltk.stem.WordNetLemmatizer()
-from nltk.corpus import stopwords
-set(stopwords.words('english'))
-from nltk.tokenize import RegexpTokenizer
-tokenizer = RegexpTokenizer(r'\w+')
+# ## NLP
+# import nltk
+# lemmatizer = nltk.stem.WordNetLemmatizer()
+# from nltk.corpus import stopwords
+# set(stopwords.words('english'))
+# from nltk.tokenize import RegexpTokenizer
+# tokenizer = RegexpTokenizer(r'\w+')
 
 class DownloadProgressBar(tqdm):
     def update_to(self, b=1, bsize=1, tsize=None):
@@ -226,9 +226,6 @@ class Onet:
         self.source = source
         self.dataset = {}
         self.matrix_dic = {}
-
-        self.socp_titles = self.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
-        
         zip_file = path + '/'+ name +'.zip'
         onet_exists = os.path.isfile(zip_file)
         if not onet_exists:
@@ -237,9 +234,11 @@ class Onet:
             #!$shcmd'
             download_url(source,zip_file)
             print('*** Complete.')
-        
         self.zip = zipfile.ZipFile(zip_file)
         self.tocdf = self.make_toc()
+        self.socp_titles = self.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
+
+
     
     def make_toc(self,sep ='.'):
         '''
@@ -329,7 +328,6 @@ class Onet:
 # Instantiate Onet() as 'onet'
 onet = Onet()            
 
-#%%    
 
 class   Census:
     '''
@@ -657,38 +655,35 @@ class Svd:
         
 
 
-## NLP UNDER DEVELOPMENT #################
+# ## NLP UNDER DEVELOPMENT #################
 
-def drop_stopwords(wordvec,language='English'):
-    wv = np.array(wordvec)
-    stw = np.array(stopwords.words(language))
-    without_stopwords = wv[[not word in stw for word in wv]]
-    return without_stopwords
+# def drop_stopwords(wordvec,language='English'):
+#     wv = np.array(wordvec)
+#     stw = np.array(stopwords.words(language))
+#     without_stopwords = wv[[not word in stw for word in wv]]
+#     return without_stopwords
 
-def lemmatize(wordvec):
-    return [lemmatizer.lemmatize(word) for word in wordvec ]
+# def lemmatize(wordvec):
+#     return [lemmatizer.lemmatize(word) for word in wordvec ]
 
-def nlp_prep(string):
-    wordvec = tokenizer.tokenize(string.lower())
-    return np.array(lemmatize(drop_stopwords(wordvec)))
+# def nlp_prep(string):
+#     wordvec = tokenizer.tokenize(string.lower())
+#     return np.array(lemmatize(drop_stopwords(wordvec)))
 
 
 #def word_matrix(df_col):
 
-    
 
+# title_vec = onet.socp_titles['Title'].apply(nlp_prep)
+# onet.socp_titles['title_vec'] = title_vec
+# onet.socp_titles['title_vec']
 
-
-title_vec = onet.socp_titles['Title'].apply(nlp_prep)
-onet.socp_titles['title_vec'] = title_vec
-onet.socp_titles['title_vec']
-
-tt = onet.socp_titles.set_index('SOCP_shave')[['title_vec']]
-keywords = np.array(list(set(tt['title_vec'].apply(list).sum())))
-df = pd.DataFrame(index = keywords, columns = tt.index)
-for socp,keyw in tt['title_vec'].to_dict().items():
-    df[socp].loc[keyw]=1
-sp = scipy.sparse.csr_matrix(df.fillna(0))
+# tt = onet.socp_titles.set_index('SOCP_shave')[['title_vec']]
+# keywords = np.array(list(set(tt['title_vec'].apply(list).sum())))
+# df = pd.DataFrame(index = keywords, columns = tt.index)
+# for socp,keyw in tt['title_vec'].to_dict().items():
+#     df[socp].loc[keyw]=1
+# sp = scipy.sparse.csr_matrix(df.fillna(0))
 
 
 
@@ -787,7 +782,6 @@ class Xyzzy:
         artr_2 = arch[kind].iloc[arch_n2] @ tr[kind].T
 
         return artr_1 @ artr_2
-        
 
 #%%
 if __name__ == "__main__":  
@@ -907,15 +901,16 @@ archie_f = widgets.interact(plot_feat,
                         continuous_update = False,
                         description='#Archetypes:'))
 
-# accordion = widgets.Accordion(children=[widgets.IntSlider(),widgets.IntSlider()])
-# accordion.set_title(0, 'Slider')
-# accordion.set_title(1, 'Text')
-# accordion
+accordion = widgets.Accordion(children=[widgets.IntSlider(),widgets.IntSlider()])
+accordion.set_title(0, 'Slider')
+accordion.set_title(1, 'Text')
+accordion
 
-# tab_nest = widgets.Tab()
-# tab_nest.children = [accordion, accordion]
-# tab_nest.set_title(0, 'Archetypes: Features')
-# tab_nest.set_title(1, 'Copy of')
-# tab_nest
+tab_nest = widgets.Tab()
+tab_nest.children = [accordion, accordion]
+tab_nest.set_title(0, 'Archetypes: Features')
+tab_nest.set_title(1, 'Copy of')
+tab_nest
+        
 
 #%%
