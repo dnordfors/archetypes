@@ -1,0 +1,19 @@
+Metadata-Version: 1.2
+Name: xgboost
+Version: 0.90
+Summary: XGBoost Python Package
+Home-page: https://github.com/dmlc/xgboost
+Maintainer: Hyunsu Cho
+Maintainer-email: chohyu01@cs.washington.edu
+License: Apache-2.0
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Requires-Python: >=3.4
