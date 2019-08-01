@@ -5,25 +5,44 @@ David Nordfors
 Github: dnordfors
 
 ## IN THIS REPOSITORY
-- ./data : Initially empty
-- ./src : 
-    - Archetypes.py Code package
-    - getdata.sh Shell command for importing data from O*Net and US census
+- application.py 
+- requirements.txt
 
-## CHALLENGE: JOBS ARE CHANGING FAST. CONFUSION FOLLOWS.
+Snapshot of the app:
 
-Well paid jobs require abilities, skills and knowledge. The O*Net database maps the profiles for a wealth of occupations. Wages for these occupations can be found in the US Census ACS/PUMS database. Despite all the available data available, top quality research and huge economic resources in HR, still **only one out of twenty people have a job that fits them and that engages them**. The world's most important industry – the one that matches billions of people with jobs – has merely a *five percent* success rate (source: Gallup). This is beyond a matter of lacking resources, there must be structural deficiencies. I am suggesting it lacks the language for analysing, strategizing and executing on goals.   
+!['O*NET abilities heatmap'](images/app_snapshot.png)
 
-We are used to looking at what jobs require from people. But that is not working as well as it used to. Occupations are changing or disappearing at a high speed and confusion follows. 
+### THE IDEA
+            
+- **To use Machine Learning for building a speakable language** for analyzing occupations that is **simple and intuitive, yet improving analytics and predictions**   
+- **Archetypes are patterns, clusters of co-occuring features.** They are different from *Stereotypes*, which are examples taking the place
+of archetypes. *Archetypal Analysis* uses recurring patterns to describe something. This is not the same as *Stereotyping*, that equates
+that something with the stereotype. Machine Learning and Probabilities Topic Modeling can be used for Archetypal Analysis**
+- **The method can be applied to a wide range of data sources. The starting point is O-net snf US Census ACS PUMS***  
 
-### The O*NET Database
-The O*NET database remains useful, it profiles nearly a thousand occupations, ranking what each occupation requires from workers, with regards to abilities, knowledge, skills, and so on. It covers in the order of two hundred features.
+### CHALLENGE: JOBS ARE CHANGING. CONFUSION FOLLOWS.
+
+Well paid jobs require abilities, skills and knowledge. O-Net maps what occupations require, the US Census ACS/PUMS database maps the demograpics, 
+showing how common the occupationms are, what workers earn, their education, how they live and more. There is much more data to be explored 
+beyond O-Net and Census. Still **the HR industry has only a five percent success rate**; nineteen out of twenty workers have jobs that either don't match 
+their capabilities, don't engage them, or both. (source: Gallup). There is no lack of data, smart people or resources, the HR industry has that. 
+    
+I am suggesting it lacks the language for analysing, strategizing and making a great fit between people and what they do for a living. 
+One reason for this is innovation. We are used to using stereotypes when talking about jobs, as in 'for this job you need to 
+be both a bit of an engineer and a teacher'. But with all the rapid changes going on in the workplace, we are no longer certain what this 
+actually means. Occupations are changing or disappearing at a high speed and confusion follows. 
+
+
+### O-NET 
+The O-NET database profiles nearly a thousand occupations, ranking what each occupation requires from workers, 
+with regards to abilities, knowledge, skills, and so on. It covers hundreds of features.
 
 It has a hierarchical ordering: 23 Major occupation groups, 97 Minor ones, 461 Broad occupations and 840 Detailed occupations
 
-Here below is a part of the O*NET database, showing the need of 52 abilities in the 461 broad occupations. The data is relevant and good, but challenging to overview at-a-glance; the plot is a pleasant piece of computer-generated art, not much else.   
+Here below is a part of the O*NET database, showing the need of 52 abilities in the 461 broad occupations. The data is relevant and good, but challenging to overview at-a-glance; the plot is a pleasant piece of computer-generated art, not much else.    
 
 !['O*NET abilities heatmap'](images/onet_abilities.png)
+
 
 ## Proposal: Talent-Based Archetypes Covering Most Jobs
 In this project I explore how data science can be used to construct a simple language for jobs and abilities that teams and individuals can use in daily speech. It is related to Jungian psychology and ‘archetypes’, like in the  ‘Myers-Briggs’ personality test, that already are in use in HR.  

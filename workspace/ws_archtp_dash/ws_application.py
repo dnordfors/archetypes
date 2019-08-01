@@ -1,0 +1,1371 @@
+
+#%%
+# IMPORT LIBRARIES
+
+## OS
+import os
+
+# MANAGE
+import pandas as pd
+pd.options.mode.chained_assignment = None  # default='warn'
+
+import numpy as np
+import scipy
+import collections
+
+## FIT
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate
+from sklearn.model_selection import cross_val_score
+from sklearn import linear_model
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+import xgboost as xgb
+
+from sklearn.metrics import r2_score
+
+## DECOMPOSITION
+from sklearn.decomposition import NMF
+from scipy.linalg import svd
+
+## PRESENTATION
+
+    ### Graphics
+from matplotlib import pyplot as plt
+import seaborn as sns
+sns.set(rc={'figure.figsize':(11.7,8.27)})
+
+import plotly
+import plotly.graph_objs as go
+import plotly.graph_objects as go
+import plotly.figure_factory as ff
+
+    ### Rich text 
+from IPython.display import display, Markdown, Latex
+
+    ### Apps & Widgets
+import ipywidgets as widgets
+
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+from dash.dependencies import Input, Output
+
+
+## I/O
+import zipfile
+import requests
+import pickle
+
+## DOWNLOAD
+import urllib.request
+from tqdm import tqdm
+
+# ## NLP
+# import nltk
+# lemmatizer = nltk.stem.WordNetLemmatizer()
+# from nltk.corpus import stopwords
+# set(stopwords.words('english'))
+# from nltk.tokenize import RegexpTokenizer
+# tokenizer = RegexpTokenizer(r'\w+')
+
+class DownloadProgressBar(tqdm):
+    def update_to(self, b=1, bsize=1, tsize=None):
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)
+
+def download_url(url, output_path):
+    with DownloadProgressBar(unit='B', unit_scale=True,
+                             miniters=1, desc=url.split('/')[-1]) as t:
+        urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
+
+
+## CREATE PATHS / DIRECTORIES 
+
+# path to home directory (the location of this file)
+#path0 = !pwd
+#path = path0.n
+
+path = os.path.curdir
+
+os.chdir(path)
+
+#Check if directories exist - creat directories if needed
+
+paths = {}
+paths['data'] = './data'
+paths['census'] = paths['data'] + '/census'
+paths['onet'] = paths['data'] + '/onet'
+
+[os.makedirs(pth, exist_ok=True) for pth in paths.values()]
+
+
+## GENERAL FUNCTIONS 
+### NORMALIZATION
+# Statistic normalization - subtract mean, scale by standard deviation
+def norm_stat(vec, weights = False):
+    '''
+    Normalizes a vector v-v.mean())/v.std() 
+    '''
+    if weights:
+        return  np.mean(abs(vec - vec.mean()))  
+    return (vec-vec.mean())/vec.std()
+
+# Algebraic normalization - dot product
+def norm_dot(vec, weights = False):
+    '''
+    Normalizes the columns of a DataFrame (dot product)
+    '''
+    if weights:
+        return  np.sqrt(vec @ vec)
+    
+    return vec / np.sqrt(vec @ vec)
+
+# Algebraic normalization - dot product
+def norm_sum(vec, weights = False):
+    '''
+    Normalizes the columns of a DataFrame (dot product)
+    '''
+    if weights:
+        return  vec.sum()
+    
+    return vec / vec.sum()
+
+# 
+# Scaled Normalization -
+def scale(vec, weights = False):
+    stop_divide_by_zero = 0.00000001
+    if weights:
+        return (vec.max()-vec.min() + stop_divide_by_zero)
+    return (vec-vec.min())/(vec.max()-vec.min() + stop_divide_by_zero)
+
+
+
+### SELECTION 
+def is_string(a):
+    '''
+    typically used for Boolean masking in Pandas, e.g.  
+               df[df['column'].apply(is_string)] 
+    returns all rows in df where df['column'] has a string value   
+    '''
+    return isinstance(a,str)
+
+
+## CLASSES
+
+### DATA DICTIONARY 
+
+class    Datadic: 
+    def __init__(self):
+        # Set up FIPS CODES for states and regions
+        fips_codes_exists = os.path.isfile('data/state-geocodes-v2016.xls')
+        if not fips_codes_exists:
+            print('*** FIPS State Geocodes is missing. Downloading from Census...')
+            # !curl -o ./data/state-geocodes-v2016.xls -O https://www2.census.gov/programs-surveys/popest/geographies/2016/state-geocodes-v2016.xls
+            download_url('https://www2.census.gov/programs-surveys/popest/geographies/2016/state-geocodes-v2016.xls','./data/state-geocodes-v2016.xls')
+            print('*** Complete.')
+
+        self.dfips = pd.read_excel('data/state-geocodes-v2016.xls')[5:] #five first rows are comment
+        self.name_to_fips = self.dfips.set_index('Unnamed: 3')['Unnamed: 2'].to_dict()
+        self.fips_to_name = self.dfips.set_index('Unnamed: 2')['Unnamed: 3'].to_dict()
+        self.translate_fips = {**self.name_to_fips,**self.fips_to_name}
+        
+        self.state_to_abbrev = {'Alabama': 'AL','Alaska': 'AK','Arizona': 'AZ','Arkansas': 'AR','California': 'CA','Colorado': 'CO',
+                'Connecticut': 'CT','Delaware': 'DE','District of Columbia': 'DC','Florida': 'FL','Georgia': 'GA','Hawaii': 'HI',
+                'Idaho': 'ID','Illinois': 'IL','Indiana': 'IN','Iowa': 'IA','Kansas': 'KS','Kentucky': 'KY','Louisiana': 'LA',
+                'Maine': 'ME','Maryland': 'MD','Massachusetts': 'MA','Michigan': 'MI','Minnesota': 'MN','Mississippi': 'MS','Missouri': 'MO',
+                'Montana': 'MT','Nebraska': 'NE','Nevada': 'NV','New Hampshire': 'NH','New Jersey': 'NJ','New Mexico': 'NM',
+                'New York': 'NY','North Carolina': 'NC','North Dakota': 'ND','Ohio': 'OH','Oklahoma': 'OK','Oregon': 'OR',
+                'Pennsylvania': 'PA','Rhode Island': 'RI','South Carolina': 'SC','South Dakota': 'SD','Tennessee': 'TN','Texas': 'TX',
+                'Utah': 'UT','Vermont': 'VT','Virginia': 'VA','Washington': 'WA','West Virginia': 'WV','Wisconsin': 'WI','Wyoming': 'WY'}
+        self.abbrev_to_state = {v: k for k, v in self.state_to_abbrev.items()}
+        self.translate_state_abbrev = {**self.state_to_abbrev,**self.abbrev_to_state}
+        
+        #Set up CENSUS/ACS PUMS DATA DICTIONARY
+        pums_datadic_exists = os.path.isfile('./data/census/PUMS_Data_Dictionary.csv')
+        if not pums_datadic_exists:
+            print('*** Census ACS/PUMS Data Dictionary is missing. Downloading from Census...')
+            # !curl -o ./data/census/PUMS_Data_Dictionary.csv -O https://www2.census.gov/programs-surveys/acs/tech_docs/pums/data_dict/PUMS_Data_Dictionary_2017.csv
+            download_url('https://www2.census.gov/programs-surveys/acs/tech_docs/pums/data_dict/PUMS_Data_Dictionary_2017.csv','./data/census/PUMS_Data_Dictionary.csv')
+            print('*** Complete.')
+        self.census = pd.read_csv("data/census/PUMS_Data_Dictionary.csv").drop_duplicates()
+        self.census_variable_definitions = self.census.groupby('RT').first()['Record Type'].to_dict()      
+            
+    def fips(self,name_or_fipsnr):
+        nn = datadic.abbrev_to_state.get(name_or_fipsnr,name_or_fipsnr)
+        return self.translate_fips.get(nn)
+    
+    def state_abbrev(self,name_or_abbrev):
+        return self.translate_state_abbrev.get(name_or_abbrev)
+    
+    def census_def(self,variable_code):
+        return self.census_variable_definitions.get(variable_code)
+
+    # All definitions containing a select string
+    def clk(self,census_col,search_string):
+        return self.census[census_col].fillna('nan').apply(lambda x: search_string.lower() in x.lower())
+    
+    def census_about(self,search_string):
+        return self.census[self.clk('Record Type',search_string) | self.clk('Unnamed: 6',search_string) ]
+    
+datadic = Datadic()
+
+
+class Onet:
+    '''
+    Onet() is an object based on the Onet labor market database. 
+
+    my_onet.source  - string: URL for importing the onet database from source
+    my_onet.path    - string: local path to the directory where the onet database is stored. (set in 'paths' dictionary)
+    my_onet.name    - string: the prefix of stored files, e.g. zipped DB:      path + '/'+ name +'.zip'
+    my_onet.toc()   - function: returns table of contents for onet database
+
+   # Data in Onet database
+    my_onet.data()
+                    - function: returns dataset named by label.
+    my_onet.matrix() 
+                    - function: returns onet dataset in matrix form
+    my_onet.n_matrix() 
+                    - function: normalized onet matrix
+ 
+   
+    '''
+    def __init__(self,path = paths['onet'], name = 'onet', source = 'https://www.onetcenter.org/dl_files/database/db_23_3_excel.zip'):
+        
+        self.path = path
+        self.name = name
+        self.source = source
+        self.dataset = {}
+        self.matrix_dic = {}
+        zip_file = path + '/'+ name +'.zip'
+        onet_exists = os.path.isfile(zip_file)
+        if not onet_exists:
+            print('*** Onet database does not exist. Downloading from Onet...')
+            #shcmd = 'curl -o '+zip_file+' -O '+source
+            #!$shcmd'
+            download_url(source,zip_file)
+            print('*** Complete.')
+        self.zip = zipfile.ZipFile(zip_file)
+        self.tocdf = self.make_toc()
+        self.socp_titles = self.data('Alternate Titles',socp_shave = 8)[['SOCP_shave','Title']].drop_duplicates()
+
+
+    
+    def make_toc(self,sep ='.'):
+        '''
+        Creates table of contents for Onet Database, returns as my_onet.tocdf (dataframe)
+        '''
+        nlst = np.array(self.zip.namelist())
+        dr = nlst[0]
+        nl = pd.DataFrame(nlst)
+        self.tocdf = pd.DataFrame(nl[0].apply(lambda x: np.char.split(x.replace(dr,''),sep = '.'))[1:].to_dict(),
+                                    index = ['name','extension']).T
+        return self.tocdf
+    
+    def toc(self, name_contains= False, extension = False):
+        '''
+        Returns table of contents for Onet Database (dataframe) masked by string and/or extension
+        '''
+        selection = self.tocdf
+        if extension:
+            selection = selection[selection['extension'] == extension  ]['name']
+        if name_contains:
+            search_string = name_contains
+            selection = selection[selection['name'].apply(lambda x: search_string.lower() in x.lower())]['name']
+        return selection
+         
+    
+    def data(self,label, socp_shave = 6):
+        '''
+        Returns onet dataset named 'label'
+        '''
+        # If dataframe in dictionary:  
+        if label in self.dataset.keys():
+            df = self.dataset[label]
+            df['SOCP_shave'] = df['O*NET-SOC Code'].apply(lambda x: x.replace('.','').replace('-','')).apply(lambda x: x[:socp_shave])
+            return self.dataset[label]
+
+        # If dataframe NOT in dictionary: 
+        # If pickled dataframe does not exist, create from zipped excel
+        # Read pickled dataframe into dictionary
+        pkl_name = self.path +'/'+ self.name +'_'+ label +'.pkl'
+        pkl_exists = os.path.isfile(pkl_name)
+
+        if not pkl_exists:
+            print('*** '+label+'.pkl does not exist. Creating...')
+            xlsx_name = self.zip.namelist()[0] + label +'.xlsx'
+            pd.read_excel(self.zip.extract(xlsx_name)).to_pickle(pkl_name)
+            print('*** Complete.')
+        df = pd.read_pickle(pkl_name)
+        df['SOCP_shave'] = df['O*NET-SOC Code'].apply(lambda x: x.replace('.','').replace('-','')).apply(lambda x: x[:socp_shave])
+        self.dataset[label] = df                              
+        return self.dataset[label]
+    
+    def grpby(self, label, columns = ['Scale Name','Element Name'], data_value = 'Data Value', scale_name = 'Level'):
+        grp = pd.DataFrame(self.data(label).copy().groupby(columns).apply(lambda x: x[data_value].values))
+        return grp
+
+    def matrix(self,label, xx = 'Element Name',  yy = 'SOCP_shave',socp_shave = 6 , data_value = 'Data Value', scale_name = 'Level',
+                show = 'mean', norm = False):
+        '''
+        Converts onet dataset into a matrix 
+        xx          - matrix columns
+        yy          - matrix index
+        scale_name  - value category 
+        data_value  - data values
+        socp_shave  - number of digits in 'shaved' SOCP number
+        show        - output matrix shows 'mean'(default), 'std' or 'count' (relevant for groupby socp_shave)
+        norm        - columns are normalized: 'norm = norm_dot'  [ col/sqrt(col@col) ] 
+                                              'norm = norm_stat' [ (col - col.mean) / col.std ] 
+                                         
+        '''
+        if not (label,xx,yy,socp_shave,data_value,scale_name,norm) in self.matrix_dic.keys():
+            print('*** Onet matrix not in dictionary. Constructing....')
+            columns = ['Scale Name',yy,xx] # Default columns
+            grpb = self.data(label,socp_shave = socp_shave).groupby(columns)
+            mat_mean   = grpb.mean().loc[scale_name][data_value].unstack()
+            mat_std    = grpb.std().loc[scale_name][data_value].unstack()
+            mat_count = grpb.count().loc[scale_name][data_value].unstack().T.iloc[[0]].T
+            if norm:
+                w = mat_mean.apply(lambda col: norm(col,weights = True) )
+                mat_mean = mat_mean.apply(norm)
+                mat_std = mat_std/w
+            self.matrix_dic[label,xx,yy,socp_shave,data_value,scale_name,norm] = {
+                'mean':mat_mean,'std':mat_std,'count':mat_count}
+            print('*** Complete')
+        return self.matrix_dic[label,xx,yy,socp_shave,data_value,scale_name,norm][show]
+    
+       
+# Instantiate Onet() as 'onet'
+onet = Onet()            
+
+
+class   Census:
+    '''
+    Census() is an object containing census ACS/PUMS data 
+    my_census.source    - string: URL for importing the census data from US Census online
+    my_census.path      - string: local path to the directory where the census data is stored. (set in 'paths' dictionary)
+    my_census.name      - string: the prefix of stored files, e.g. pickle:      path + '/'+ name +'.pkl'
+
+    my_census.data(self,state, socp_shave = n)
+                        - function: returns the acs/pums for 'state', with an SOCP number of 'n' digits (default n=6)
+    my_census.dataset   - dataframe: acs/pums data for a state (state abbreviation used for naming)
+    my_census.import_from_source(self,state)
+                        - function: imports data for 'state' from my_census.source and converts to pickled dataframe 
+
+
+    # my_census.state    – String: name of state, e.g. 'California', or abbreviation, e.g. 'CA'
+    # my_census.data     – DataFrame: imported census ACS/PUMS data (from pickle)
+    # my_census.workers  – DataFrame: people fulfilling 'workers' criteria (see below)
+    # my_census.occupations         – DataFrame: Occupations of the workers (groupby SOCP-number)
+    
+    # my_census.workers_occupations(age_low = 40, age_high = 65, std_max = 0.5, socp_granularity = 5):
+    #      - Function: populates my_census.workers / .occupations according to criteria
+    #          – Workers: age_low (default 40)  and age_high (default 65)
+    #          – Occupations: socp_granularity (default 5) ; the length of the SOCP number, default 5 digits.
+    
+    '''
+
+    def __init__(self,path = paths['census'], 
+                 name = 'census', 
+                 source = 'https://www2.census.gov/programs-surveys/acs/data/pums/2017/5-Year/'):
+        self.path = path
+        self.name = name
+        self.source = source
+        self.dataset = {}
+        
+    
+    def data(self,state, socp_shave = 6):
+        '''
+        READ CENSUS/ACS PUMS DATABASE. Search order: Dictionary, Pickle; Create dictionary/pickle if non-existent.
+        socp_shave  : number of digits in 'shaved' SOCP number
+        '''
+        state_abbr = datadic.state_to_abbrev.get(state,state)
+        pkl_name = self.path +'/'+ self.name +'_'+ state_abbr +'.pkl'
+        pkl_exists = os.path.isfile(pkl_name)
+        if not pkl_exists:
+            self.import_from_source(state)
+        df = pd.read_pickle(pkl_name)
+        df['SOCP_shave'] = df['SOCP'].apply(lambda x: x[:socp_shave].replace('X','0') if type(x)==str else x)
+        self.dataset[state_abbr] = df
+        return self.dataset[state_abbr]
+
+
+    # Create and execute shell command fetching state census zip-file 
+    def import_from_source(self,state):
+        '''
+        Imports ACS/PUMS dataset from US Census online, URL: my_census.source
+        '''
+        print('*** Downloading '+state+' ACS/PUMS dataset from US Census...')
+        state_abbr = datadic.state_to_abbrev.get(state,state)
+ #       shcmd = "curl -o "+self.path+'/'+self.name+"_tmp.zip -O "+ self.source +self.state_zipfile_name(state_abbr)
+ #       ! $shcmd
+        download_url(self.source +self.state_zipfile_name(state_abbr),self.path+'/'+self.name+"_tmp.zip")
+        print('*** Reformatting...')
+        with zipfile.ZipFile(self.path+'/'+self.name+"_tmp.zip", 'r') as zipObj:
+            zipObj.extractall(self.path)
+        csv_filename = self.path+'/psam_p'+datadic.fips(state)+'.csv'
+        pkl_filename = self.path+'/'+self.name+'_'+state_abbr+'.pkl'
+        pd.read_csv(csv_filename).to_pickle(pkl_filename)
+        # ! rm $csv_filename 
+        os.remove(csv_filename)
+        print('*** Complete.')
+        return 
+
+    def state_zipfile_name(self,state_abbr):
+        '''
+        Input: State name abbreviation. Returns census-convention name of zipped csv-file
+        '''
+        return 'csv_p'+state_abbr.lower()+'.zip'
+    
+
+# Instantiate Census() as 'census'
+census = Census()
+
+# # Xy - matrix
+class MakeXy:
+    '''
+    MakeXy is an object containing a combination of census and onet data
+    
+    my_makeXy = MakeXy(my_census,my_onet)
+    
+    my_makeXy.Xy     : Merges my_census and my_onet with 'SOCP_shave' (occupational code)
+                                as common variable and my_census[y_label] as target variable, and groups: 
+                                my_make.Xy(y_label) = merged.groupby('SOCP_shave').sum() 
+    my_makeXy.X      : X-matrix / independent variables
+    my_makeXy.y      : y-matrix / target
+    
+    '''
+    def __init__(self,census,onet,y_label = 'fte'):
+        self.census  = census
+        self.onet    = onet
+        self.y_label = y_label
+        merged       = pd.merge(self.census[['SOCP_shave',self.y_label]],self.onet,
+                         left_on = 'SOCP_shave',right_index=True)
+        self.Xy =  merged.groupby('SOCP_shave').sum()
+        self.X  =  self.Xy.drop(self.y_label, axis =1)
+        self.y  =  self.Xy[self.y_label]
+
+
+
+    
+# # MATRIX-FACTORIZATION: DIMENSIONALITY REDUCTION & ARCHETYPING
+
+# ## CLUSTER FEATURES INTO OCCUPATION CATEGORIES
+# ## Use non-zero matrix factorization for clustering
+# ## Use singular value decomposition first state for determining overall similarity
+
+
+class Archetypes:
+    '''
+    Archetypes: Performs NMF of order n on X and stores the result as attributes. 
+    Archetypes are normalized: cosine similarity a(i) @ a(i) = 1. 
+    Atributes:
+        my_archetypes.n         - order / number of archetypes
+        my_archetypes.X         - input matrix
+        
+        my_archetypes.model     - NMF model 
+        my_archetypes.w         - NMF w-matrix 
+        my_archetypes.h         - NMF h-matrix
+        
+        my_archetypes.o         - occupations x archetypes matrix (from w-matrix)
+        my_archetypes.on        - occupations x normalized archetypes matrix (from w-matrix) - SOCP number as index. 
+        my_archetypes.occ       - occupations x normalized archetypes matrix - Occupation names as index
+        
+        my_archetypes.f         - features x archetypes matrix (from h-matrix)
+        my_archetypes.fn        - features x normalized archetypes matrix
+        
+    '''
+    def __init__(self,X,n,norm = norm_dot):
+        self.n = n
+        self.X = X
+        self.model = NMF(n_components=n, init='random', random_state=0, max_iter = 1000, tol = 0.0000001)
+        self.w = self.model.fit_transform(self.X)
+        self.o = pd.DataFrame(self.w,index=self.X.index)
+        self.on = self.o.T.apply(norm).T
+        self.occ = self.on.copy()
+        self.occ['Occupations'] = self.occ.index
+#        self.occ['Occupations'] = self.occ['Occupations'].apply(onet_socp_name)
+        self.occ = self.occ.set_index('Occupations')
+        self.h = self.model.components_
+        self.f = pd.DataFrame(self.h,columns=X.columns)
+        self.fn =self.f.T.apply(norm).T
+        self.plot_occupations_dic ={}
+        self.plot_features_dic ={}
+
+        
+    def plot_features(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = False): 
+        '''
+        Plot Archetypes as x and features as y. 
+        Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
+        This clusters features and archetypes in a way that visualizes similarities and diffferences
+        between the archetypes. 
+        
+        Archetypes are normalized (cosine-similarity): dot product archetype[i] @ archetype[i] = 1.
+        The plot shows intensities (= squared feature coefficients) so that the sum of intensities = 1.  
+
+        fig_scale: default values (x/1, y/3.5) scales the axes so that all feature labels are included in the plot.
+        
+        For other hyperparameters, see seaborn.clustermap
+     
+        '''
+        param = (fig_scale,metric,method,vertical)
+        if param in self.plot_features_dic.keys():
+            fig = self.plot_features_dic[param]
+            return fig.fig
+
+        df = np.square(self.fn)
+
+        if vertical:
+            fig = sns.clustermap(df.T,robust = True, z_score=1,figsize=(
+                self.n/fig_scale[0],self.X.shape[1]/fig_scale[1]),method = method,metric = metric)        
+        else: # horizontal
+            fig = sns.clustermap(df,robust = True, z_score=0,figsize=(
+                self.X.shape[1]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)        
+        self.features_plot = fig
+        return fig
+
+
+    def plot_occupations(self,fig_scale = (1,3.5),metric='cosine', method = 'single',vertical = False):
+        '''
+        Plot Archetypes as x and occupations as y. 
+        Utilizes Seaborn Clustermap, with hierarchical clustering along both axes. 
+        This clusters occupations and archetypes in a way that visualizes similarities and diffferences
+        between the archetypes. 
+        
+        Occupations are normalized (cosine-similarity): dot product occupation[i] @ occupation[i] = 1.
+        The plot shows intensities (= squared feature coefficients) so that the sum of intensities = 1.  
+
+        fig_scale: default values (x/1, y/3.5) scales the axes so that all feature labels are included in the plot.
+        
+        For other hyperparameters, see seaborn.clustermap
+     
+        '''
+        param = (fig_scale,metric,method,vertical)
+        if param in self.plot_occupations_dic.keys():
+            fig = self.plot_occupations_dic[param]
+            #return
+            return fig.fig
+
+        df = np.square(self.occ)
+        if vertical:
+            fig = sns.clustermap(df, figsize=(
+                self.n/fig_scale[0],self.X.shape[0]/fig_scale[1]),method = method,metric = metric)
+        else: # horizontal
+            fig = sns.clustermap(df.T, figsize=(
+                self.X.shape[0]/fig_scale[1],self.n/fig_scale[0]),method = method,metric = metric)
+        self.plot_occupations_dic[param] = fig
+        #return
+        return fig.fig
+
+        
+class Xfit:
+    '''
+    Xfit is a 'fit-as-an-object' solution:
+        my_fit = Xfit(X,y,Xsamples=False, my_regressor, itr, xval) 
+            does the following:
+            0. SAMPLES X - unless Xsamples is 'False' [default value], X is replaced by n random samples of itself  
+            1. SPLITS X and y into test and training sets. 
+            2. FITS a cross-validation, slicing the training data into 'xval' slices : cross_validate(regressor,X_train.values, y_train.values, cv=xval) 
+            3. BOOTSTRAPS: Repeats (1-2) 'itr' number of times
+            4. RETURNS RESULTS as attributes:
+                my_fit.X          – List: The original X input data
+                my_fit.itr        – Number of iterations / fits
+                my_fit.y          – List: The original y input data
+                my_fit.xval       – Number of slices in the cross validation
+                my_fit.fit        – Dictionary: the 'itr' number of cross-validated fits, including estimators
+                my_fit.y_test     – Dictionary: the y_test (list) for each fit
+                my_fit.y_predict  – Dictionary: the predicted y for each fit
+                my_fit.scores     – Pandas.DataFrame: validation scores for all fits 
+                my_fit.score      – Dictionary: the mean score and standard deviation. 
+                my_fit.features_importances        – Dictionary: feature_importances for all fits (for estimators with '.feature_importance_' as an attribute )
+                my_fit.feature_importance          – Pandas.DataFrame: the average feature importances and standard deviations.           
+    '''
+    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import cross_validate
+    from sklearn.model_selection import cross_val_score
+    from sklearn import linear_model
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.ensemble import GradientBoostingRegressor
+    import xgboost as xgb  
+
+    def __init__(self,X,y,Xsamples=False,regressor = xgb.XGBRegressor(),itr = 10, xval = 3):      
+        # FITTING
+        n = xval  
+        feature_names = X.columns
+        res = {}
+        ypred = {}
+        ytest = {}
+        scor = {}
+        feat_imp = {}       
+        for i in range(itr):
+            if Xsamples:
+                X_train, X_test, y_train, y_test = train_test_split(X.sample(Xsamples,axis=1), y, test_size=0.2)
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+            res_xboo = cross_validate(regressor,X_train.values, y_train.values, cv=n, return_estimator=True)
+            ytest[i] = y_test
+            res[i] = res_xboo
+            ypred[i] = [res_xboo['estimator'][j].predict(X_test.values) for j in range(n)]
+            scor[i] = [res_xboo['estimator'][j].score(X_test.values,y_test.values) for j in range(n)]
+            feat_imp[i] = [res_xboo['estimator'][j].feature_importances_ for j in range(n)]
+        scor_tot = np.concatenate(np.array(list(scor.values())))
+        feat_tot = pd.concat([pd.DataFrame(feat_imp[i]) for i in range(itr)])
+#       # feat_tot.columns = X.columns
+        feat_tot.reset_index(inplace=True,drop = True)
+        feat_mean = pd.concat([feat_tot.mean(),feat_tot.std()],axis=1)
+        feat_mean.columns = ['mean','std']
+        feat_mean['ratio'] = feat_mean['std']/feat_mean['mean']      
+        # STORING RESULTS AS ATTRIBUTES
+        self.X = X
+        self.y = y
+        self.fit = res
+        self.y_predict = ypred
+        self.y_test = ytest
+        self.scores = pd.DataFrame(scor).T
+        self.score = {'mean':scor_tot.mean(), 'std':scor_tot.std()}
+        self.feature_importances = feat_imp
+        self.feature_importance = feat_mean.sort_values('mean',ascending=False)
+        self.itr =itr
+        self.xv = xval
+
+
+
+class Svd:
+    ''''
+    Singular value decomposition-as-an-object
+        my_svd = Svd(X) returns
+        my_svd.u/.s/.vt – U S and VT from the Singular Value Decomposition (see manual)
+        my_svd.f        – Pandas.DataFrame: f=original features x svd_features
+        my_svd.o        - Pandas.DataFrame: o=occupations x svd_features
+        my_svd.volume(keep_volume) 
+                        - collections.namedtuple ('dotted dicionary'): 
+                          Dimensionality reduction. keeps 'keep_volume' of total variance
+                          
+                          
+    '''
+    def __init__(self,X):
+        self.u,self.s,self.vt = svd(np.array(X))
+        self.f = pd.DataFrame(self.vt,columns=X.columns)
+        self.o = pd.DataFrame(self.u,columns=X.index)
+        
+    def volume(self,keep_volume):
+        ''' 
+        Dimensionality reduction, keeps 'keep_volume' proportion of original variance
+        Type: collections.namedtuple ('dotted dictionary')
+        Examples of usage:
+        my_svd.volume(0.9).s - np.array: eigenvalues for 90% variance 
+        my_svd.volume(0.8).f - dataframe: features for 80% variance
+        my_svd.volume(0.5).o - dataframe: occupations for 50% variance      
+        '''
+        dotted_dic = collections.namedtuple('dotted_dic', 's f o')
+        a1 = self.s.cumsum()
+        a2 = a1/a1[-1]
+        n_max = np.argmin(np.square(a2 - keep_volume))
+        cut_dic = dotted_dic(s= self.s[:n_max],f= self.f.iloc[:n_max], o= self.o.iloc[:n_max])
+        return cut_dic
+        
+
+
+# ## NLP UNDER DEVELOPMENT #################
+
+# def drop_stopwords(wordvec,language='English'):
+#     wv = np.array(wordvec)
+#     stw = np.array(stopwords.words(language))
+#     without_stopwords = wv[[not word in stw for word in wv]]
+#     return without_stopwords
+
+# def lemmatize(wordvec):
+#     return [lemmatizer.lemmatize(word) for word in wordvec ]
+
+# def nlp_prep(string):
+#     wordvec = tokenizer.tokenize(string.lower())
+#     return np.array(lemmatize(drop_stopwords(wordvec)))
+
+
+#def word_matrix(df_col):
+
+
+# title_vec = onet.socp_titles['Title'].apply(nlp_prep)
+# onet.socp_titles['title_vec'] = title_vec
+# onet.socp_titles['title_vec']
+
+# tt = onet.socp_titles.set_index('SOCP_shave')[['title_vec']]
+# keywords = np.array(list(set(tt['title_vec'].apply(list).sum())))
+# df = pd.DataFrame(index = keywords, columns = tt.index)
+# for socp,keyw in tt['title_vec'].to_dict().items():
+#     df[socp].loc[keyw]=1
+# sp = scipy.sparse.csr_matrix(df.fillna(0))
+
+
+
+##### Macro function
+
+    
+class Xyzzy:
+    '''
+    Xyzzy is a 'front-end for the back-end' and pipeline for the archetypes package. 
+    Its purpose is to simplify the archetypal analysis of labor markets, where the US Census ACS/PUMS database 
+    is used for mapping demographics with social and economic variables onto occupations, such 
+    as ages and incomes of workers in a specific demographic, and where the O-net database 
+    is used for mapping occupations onto variables, such as knowledge, skills or abilities. 
+
+    Xyzzy was not designed to be a macro command language but the door can be kept open ;)
+    
+    #### Hyper parameters:
+    
+    state       : [str ] For census.data(state), e.g. 'California' or 'CA'. 
+    state_cols  : [list] columns to include from census, default value ['WAGP','WKHP'] 
+                    - wage & work hours per week. (definitions in census data dictionary)
+    fte         : [dict] Unless 'fte=False', 'fte' column (full-time wage equivalent) is added 
+                    to the census data. Requires ['WAGP','WKHP']. 
+                    Drops rows not fulfilling screeing requirements 'min_hours' and 'min_fte'
+                    Dictionary keys:
+                        'fulltime'  - work hours for fulltime        (default 40)
+                        'min_hours' - minimum nweekly hours required (default 15)
+                        'min_fte'   - minimum fte wage required      (default 0)
+    y_label     : [str] Name of census target variable/column
+    X_label     : [str] Name of O-net set of variables 
+    socp_shave  : [int] occupational number length. Sets granularity of occupations.
+    norm        : [function] Function for normalizing the X-matrix, can be (but not restricted to) 
+                    norm_dot  norm(vec) @ norm(vec) = 1 
+                    norm_stat norm(vec).mean = 0 ; norm(vec).std = 1
+                    norm_sum  norm(vec).sum = 1
+                    scale     norm(vec).min=0 ; norm(vec).max=1
+  
+    
+    
+    '''
+    
+    def __init__(self,
+            state,
+            state_cols = ['WAGP','WKHP'],
+            fte        = {'fulltime':40,'min_hours':15,'min_fte':0}, 
+            y_label    = 'fte',
+            X_label    = 'Abilities',
+            socp_shave = 6,
+            norm       = norm_dot
+             ):
+        '''
+        MakeXy / Archetypes wizard. 
+        '''
+        self.state = state
+        self.y_label = y_label
+        self.X_label = X_label
+        self.socp_shave = socp_shave
+        self.fte     = fte
+        
+        self.onet     = onet.matrix(self.X_label,socp_shave = socp_shave, norm = norm)
+        
+        census_cols = ['SOCP_shave'] + state_cols
+        self.cols   = census_cols
+        self.census   = census.data(self.state,  socp_shave = socp_shave)[self.cols]
+        if fte:
+            c0 = self.census.dropna()
+            c1 =  c0[
+                            c0['WKHP'] >= fte['min_hours']
+                            ]
+            c1['fte'] = fte['fulltime']*c1['WAGP']/c1['WKHP']
+            self.census = c1[c1['fte']>=fte['min_fte']] 
+        self.make_Xy = MakeXy(self.census,self.onet,y_label = self.y_label)
+        self.X   = self.make_Xy.X
+        self.y   = self.make_Xy.y
+        self.Xy  = self.make_Xy.Xy
+        
+        self.svd = Svd(self.X)
+        
+        self.archetypes_dic ={}
+        
+        
+    def archetypes(self,n,norm=norm_dot):
+        if n not in self.archetypes_dic.keys():
+            self.archetypes_dic[(n,norm)] = Archetypes(self.X,n,norm=norm)
+        return self.archetypes_dic[(n,norm)]
+    
+
+    
+    def arch_dot(self,arch_n1, arch_n2, n_arch , kind = 'features'):
+        tr =   {'features'    : self.svd.f, 
+                'occupations' : self.svd.o }
+        arch = {'features'    : self.archetypes(n_arch).f, 
+                'occupations' : self.archetypes(n_arch).o.T }
+
+        artr_1 = arch[kind].iloc[arch_n1] @ tr[kind].T
+        artr_2 = arch[kind].iloc[arch_n2] @ tr[kind].T
+
+        return artr_1 @ artr_2
+
+
+
+def clustermap_df(arch):
+    clusmap = arch.plot_features() # seaborn clustermap object
+    clus_ind = clusmap.dendrogram_col.data.index[clusmap.dendrogram_col.reordered_ind]
+    clus_df = clusmap.dendrogram_col.data.reindex(clus_ind) # clustermap as df
+    return clus_df
+
+
+
+## DASH/PLOTLY  WEB APP
+
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+app.title = 'Occupational Archetypes'
+
+app.layout = html.Div(
+    html.Div([
+        html.Div([
+            html.Img(
+                src="https://i4j.info/wp-content/uploads/2018/08/logo-only-171ox.png",
+                className='three columns',
+                style={
+                    'height': '10%',
+                    'width': '10%',
+                    'float': 'right',
+                    'position': 'relative',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.H1(children='OCCUPATIONAL ARCHETYPES',
+                    className = "nine columns",
+                    style={
+                    'margin-top': 20,
+                    'margin-right': 20
+                    },
+            ),
+
+            
+
+        
+
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Label('#Archetypes', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'NoA',
+                            value = 4,
+                            multi = False
+                        ) 
+                    ],
+                    className = 'one columns offset-by-one',
+                    style={'margin-top': '30'}
+                ),
+
+                html.Div(
+                    [
+                        html.Label('Plot', style={'font-weight' : 'bold'}),
+                        dcc.RadioItems(
+                            id = 'Plots',
+                            options=[
+                                {'label': 'Features', 'value': 'f'},
+                                {'label': 'Occupations', 'value': 'o'},
+                            ],
+                            value = 'f',
+                        ) 
+                    ],
+                    className = 'two columns',
+                    style={'margin-top': '30'}
+                ),
+
+                html.Div(
+                    [
+                        html.Label('Normalize', style={'font-weight' : 'bold'}),
+                        dcc.RadioItems(
+                            id = 'norm_axis',
+                            options=[
+                                {'label': 'Archetypes', 'value': 1},
+                                {'label': 'Other', 'value': 0},
+                            ],
+                            value = 1,
+                        ) 
+                    ],
+                    className = 'two columns',
+                    style={'margin-top': '30'}
+                ),
+
+                html.Div(
+                    [
+                        html.Label('Archetype Normalization', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'arch_feat_norm',
+                            options=[
+                                {'label': 'Scale:     Max = 1, Min = 0', 'value': 'scale'},
+                                {'label': 'Intensity: Sum = 1', 'value': 'norm_sum'},
+                                {'label': 'Cosine Similarity', 'value': 'norm_dot'},
+                                {'label': 'Statistic: Mean = 0, St.Dev. = 1', 'value': 'norm_stat'}
+                            ],
+                            value='norm_sum',
+                        ) 
+                    ],
+                    className = 'three columns',
+                    style={'margin-top': '30'}
+                ),
+            ], className="row"
+        ),
+
+        html.Div([
+
+                html.Div(
+                    [
+                        html.Label('State', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'State',
+                            options = [{'label':k,'value':v} for k,v in datadic.state_to_abbrev.items()],
+                            value = 'ID',
+                            multi = False
+                        ) 
+                    ],
+                    className = 'two columns offset-by-one',
+                    style={'margin-top': '30'}
+                ),
+
+                html.Div(
+                    [
+                        html.Label('Feature Set', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'Features',
+                             options=[{'label':k,'value':k} for k in ['Abilities','Knowledge','Skills']],
+                            value = 'Abilities',
+                            multi = False
+                        ) 
+                    ],
+                    className = 'two columns',
+                    style={'margin-top': '30'}
+                ),
+
+
+                html.Div(
+                    [
+                        html.Label('Occupations', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'Occupations',
+                            options=[
+                                {'label': 'Major Groups', 'value': 2},
+                                {'label': 'Minor Groups', 'value': 3},
+                                {'label': 'Broad Occupations', 'value': 5},
+                                {'label': 'Detailed Occupations', 'value': 6}
+                            ],
+                            value=5,
+                        ) 
+                    ],
+                    className = 'two columns',
+                    style={'margin-top': '30'}
+                ),
+
+                html.Div(
+                    [
+                        html.Label('Input Feature Normalization', style={'font-weight' : 'bold'}),
+                        dcc.Dropdown(
+                            id = 'feature_norm',
+                            options=[
+                                {'label': 'Scale:     Max = 1, Min = 0', 'value': 'scale'},
+                                {'label': 'Intensity: Sum = 1', 'value': 'norm_sum'},
+                                {'label': 'Cosine Similarity', 'value': 'norm_dot'},
+                                {'label': 'Statistic: Mean = 0, St.Dev. = 1', 'value': 'norm_stat'}
+                            ],
+                            value='scale',
+                        ) 
+                    ],
+                    className = 'three columns',
+                    style={'margin-top': '30'}
+                ),
+            ], className="row"
+        ),
+
+        html.Div([
+            html.Div([
+                dcc.Graph(
+                    id='example-graph'
+                )
+            ])
+        ],  className = "row"),
+
+        dcc.Markdown('''
+            #### GOAL FOR THE APP DEVELOPMENT
+            
+            - **The idea is to use Machine Learning for building a speakable language that is simple, intuitive, relevant and better for analytics**   
+            - ** *Archetypes* are patterns, clusters of co-occuring features. They are different from *Stereotypes*, which are examples taking the place
+            of archetypes. *Archetypal Analysis* uses recurring patterns to describe something. This is not the same as *Stereotyping*, that equates
+            that something with the stereotype. Machine Learning and Probabilities Topic Modeling can be used for Archetypal Analysis**
+            - **The method can be applied to a wide range of data sources. The starting point is O-net snf US Census ACS PUMS***  
+            ''',
+            className = "nine columns",
+                    style={
+                    'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                    },
+            ),
+
+            dcc.Markdown(children = '''
+                ### CHALLENGE: JOBS ARE CHANGING. CONFUSION FOLLOWS.
+
+                Well paid jobs require abilities, skills and knowledge. O-Net maps what occupations require, the US Census ACS/PUMS database maps the demograpics, 
+                showing how common the occupationms are, what workers earn, their education, how they live and more. There is much more data to be explored 
+                beyond O-Net and Census. Still **the HR industry has only a five percent success rate**; nineteen out of twenty workers have jobs that either don't match 
+                their capabilities, don't engage them, or both. (source: Gallup). There is no lack of data, smart people or resources, the HR industry has that. 
+                    
+                I am suggesting it lacks the language for analysing, strategizing and making a great fit between people and what they do for a living. 
+                One reason for this is innovation. We are used to using stereotypes when talking about jobs, as in 'for this job you need to 
+                be both a bit of an engineer and a teacher'. But with all the rapid changes going on in the workplace, we are no longer certain what this 
+                actually means. Occupations are changing or disappearing at a high speed and confusion follows. 
+
+
+                ### O-NET 
+                The O-NET database profiles nearly a thousand occupations, ranking what each occupation requires from workers, 
+                with regards to abilities, knowledge, skills, and so on. It covers hundreds of features.
+
+                It has a hierarchical ordering: 23 Major occupation groups, 97 Minor ones, 461 Broad occupations and 840 Detailed occupations
+
+                Here below is a part of the O*NET database, showing the need of 52 abilities in the 461 broad occupations. The data is relevant and good, but challenging to overview at-a-glance; the plot is a pleasant piece of computer-generated art, not much else.    
+                ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/onet_abilities.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '50%',
+                    'width': '50%',
+                    'float':'center',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+
+            dcc.Markdown(children = '''
+                ## Proposal: Talent-Based Archetypes Covering Most Jobs
+                In this project I explore how data science can be used to construct a simple language for jobs and abilities that teams and individuals can use in daily speech. It is related to Jungian psychology and ‘archetypes’, like in the  ‘Myers-Briggs’ personality test, that already are in use in HR.  
+
+                The method has the following attractive features:
+                - **Archetypes are easily kept up-to-date**. If the O*Net data changes, or other data sources are added, the Archetypes adapt. 
+                - **Archetypes are adaptable**, they can be tailored to be relevant for subgroups. For example, Archetypes might be different in Alaska and Alabama. Archetypes created from the statistics of deaf people can differ from the average statistics.
+                - **Archetypes have mathematical relevance**. Their relevance can be measured and, if good enough, they will be useful for spotting and discussing trends and correlations. Spoken language and  mathematical analytics are kept in sync.  
+                - **Archetypes may offer more insight and better recommendations when matching individual workers with jobs**. They can say if there is a mismatch between archetypes for workers' talents, showing which combinations of human talent often co-occur, and the job-archetypes, showing with combinations the job-market typically accomodate.  
+
+                The construction of Archetypes has two steps. 
+
+                ## 1. BUILDING THE ARCHETYPES      
+
+                The archetypes are constructed by applying NMF (Non-negative matrix factorization), a method that generally can be used for sorting data into 'topics', to the O*Net database. The number of Archetypes is set by choice. 
+
+                Here, the data in the Onet database, shown here above, has been reconstructed into two archetypes, which might be labeled "body" and "mind", because of the way the abilities cluster. The abilities of each archetype are normalized, their intensities sum up to one. 
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/two_archetypes_abilities.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '70%',
+                    'width': '70%',
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                The archetypes' relation to abilities is mirrored by their relation to occupations. In this figure, instead of normalizing the archetypes, I have normalized the occupations so that it shows how many percent 'body' vs. 'mind' an occupation is. It's a clear cut on the whole, with two regions of jobs that are significantly mixed. People who like to exercise both mind and body may be interested in a closer look at these.   
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/two_archetypes_occupations.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '70%',
+                    'width': '70%',
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                ## ARCHETYPE ANALYTICS EXAMPLE
+
+                The figures above include an addition to the Onet data: the number of people who practice each occupation. This is demographic information from the US census ACS/PUMS database. They are for Californians between ages 40-65.
+
+                The number of archetypes is entirely a question of choice. Here I  chose four archetypes, which I have given suitable nicknames. The algorithm constructs clusters based on how different occupations require different abilities (from O*net), weighted by how many Californians are engaged in these occupations (from Census). Occupations are interconnected by abilities, and abilities are interconnected by occupations. The archetypes are clusters of abilities and occupations interconnecting each other.  
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/four_archetypes.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '70%',
+                    'width': '70%',
+                    'float':'center',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+
+            dcc.Markdown(children = '''
+                Archetype statistics and analytics can be automatically generated from the combined of O*Net and Census ACS/PUMS data. Here are examples of stats generated for the archetypes above. Here are examples of occupations and how much they belong to each archetype:
+
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/four_jobs.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '65%',
+                    'width': '65%',
+                    'margin-top': 20,
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                'Brainy'jobs pay, on average, better than jobs that are mainly about being strong or quick. 
+
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/four_archetypes_wages.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '65%',
+                    'width': '65%',
+                    'margin-top': 20,
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+                The 'handy' archetype is not included, because all jobs are less than 50% 'handy'. In the O*Net database, there are two broad 'handy' occupations that reach the mark: silver smiths and tailors, but apparently there are too few of them in the California statistics to be visible in the plot. 
+
+                This is just one example; the opportunity to design statistics are endless and they will automatically adapt to the choice of archetypes. 
+
+
+                ## USING ARCHETYPES FOR MAKING PREDICTIONS 
+
+                The mathemacial method behind constructing the archetypes, NMF, is kin to Singular Value Decomposition, which is a standard method for dimensionality reduction. Predictions can be improved by lowering the number of dimensions by grouping correlated variables. This is, in fact, the key behind the archetypes: a simpler AND more powerful language for jobs and abilities. 
+
+                Average wages for occupations depend on many more variables than just the worker's abilities: skills and education are also important, as well as many others, and we can expect a good portion of randomness, too. So we cannot expect too much from abilities. How much? This can be tested, and I have done it with both archetypes and abilities. As expected, archetypes are much more powerful for making predictions. 
+
+                Here below is the comparison. The R^2-score approximates how much of the variance can be explained by the model. An R^2-score of 1.0 says the model delivers perfect predictions, so I cannot expect to come close to that in this case. 
+
+                I compare using a number of archetypes with an equal number of sampled abilities. The archetypes perform much better. Eight archetypes is the optimal set of variables for the present data, managing to predict roughly half of wage differences. The set of four archetypes that I have shown above is not as good, but it still has a predictive power for wages close to one-third, and it's simplicity makes it an efficient tool for spoken conversation about abilities and the labor market. 
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/predictive_power.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '65%',
+                    'width': '65%',
+                    'margin-top': 20,
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                The quality of the fit is shown here, for four and eight archetypes, respectively. 
+
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/predicted_wages.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '65%',
+                    'width': '65%',
+                    'margin-top': 20,
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                The regression was done with XGBoost, a method that often wins Kaggle-competitions. It ranks the importance of the variables for the fit, as shown below. The importances should be seen in perspective of the four-archetype set predicting merely a third of the variation in wages.
+
+                NOTE: 'Feature Importance' does not mean 'raises the wage', it says how important the feature is for predicting the wage. In this present case, the more 'muscular' occupations have the lowest wages on average, the 'brainy' jobs have the highest. 
+            ''',
+            className = "nine columns",
+            style={ 'fontSize' :18,
+                    'text-align':'justify',
+                    'margin-top': 20,
+                    'margin-right': 20
+                },
+            ),
+            html.Img(
+                src="https://raw.githubusercontent.com/dnordfors/archetypes/master/images/feature_importance.png",
+                className='nine columns offset-by-one',
+                style={
+                    'height': '65%',
+                    'width': '65%',
+                    'margin-top': 20,
+                    'float':'center'
+                },
+            ),
+
+            dcc.Markdown(children = '''
+
+                ## CONCLUSIONS AND NEXT STEPS
+
+                Conclusions
+
+                - **Relevant, updatable Archetypes for the labor market can be created from  O*net and Census databases**
+                - **Archetypes are tailored to demographics by constructing them from subsets of the US Census data**,
+                - **Analytics are conveniently designed and automated**. 
+                - **Archetypes have higher predictive power than the original variables in the O*Net database**. 
+
+                Next steps:
+
+                - Build a web-app that can adapt to demographics and offers a selection of analytis.
+                - Expand the data to all relevant variables in O*Net and Census. 
+                - Add data sources, such as job postings, where abilities can be donnected to occupations through natural language processing. 
+                - Explore predictive powers and identify suitable fitting methods.
+                - Test using archetypes in HR teams, as a tool for improving their collective intelligence and shaping powerful common language.
+                - Explore matching people and occupations, by matching personal profiles with the archetypes. 
+                - Explore recommending training and education that leverages personal abilities to match occupations and raise wages. 
+                            
+            ''',
+            className = "nine columns",
+                    style={
+                    'margin-top': 20,
+                    'margin-right': 20,
+                    'fontSize' :18,
+                    'text-align':'justify'
+                    },
+            ),
+
+        ], className = "row")
+    ], className = "row")
+)
+
+def clustermap(df):
+    orientation = {'arch' : 'right', 'other' : 'bottom'}
+    dendro_arch = ff.create_dendrogram(df, orientation= orientation['arch'], labels=df.index)
+    dendro_arch_leaves = dendro_arch['layout']['yaxis']['ticktext']
+    dendro_other = ff.create_dendrogram(df.T, orientation= orientation['other'], labels=df.T.index)
+    dendro_other_leaves = dendro_other['layout']['xaxis']['ticktext']
+    clustered_df = df[dendro_other_leaves].loc[dendro_arch_leaves]
+    return {'heatmap':clustered_df,'arch_dendro': dendro_arch,'other_dendro': dendro_other}
+
+
+@app.callback(
+    dash.dependencies.Output('NoA', 'options'),
+    [dash.dependencies.Input('Features', 'value')])
+def set_number_of_archetypes_options(feature_set):
+    return [{'label': i, 'value': i} for i in range(onet.matrix(feature_set).shape[1])]
+
+
+@app.callback(
+    dash.dependencies.Output('example-graph', 'figure'),
+    [dash.dependencies.Input('Plots', 'value'),
+     dash.dependencies.Input('NoA', 'value'),
+     dash.dependencies.Input('State', 'value'),
+     dash.dependencies.Input('Features', 'value'),
+     dash.dependencies.Input('Occupations', 'value'),
+     dash.dependencies.Input('feature_norm', 'value'),
+     dash.dependencies.Input('arch_feat_norm', 'value'),
+     dash.dependencies.Input('norm_axis', 'value')])
+
+def update_graph_src(plots,n_archs,state,feature_set,occupations,feature_norm,arch_feat_norm,norm_axis):
+    df = Xyzzy(state,X_label = feature_set,socp_shave = occupations, norm = eval(feature_norm)).archetypes(n_archs)
+    if 'f' in plots:
+        dfp , ax = df.f , 1
+    if 'o' in plots:
+        dfp , ax = df.o.T , 0
+
+    f = clustermap(dfp)['heatmap']
+    return go.Figure(go.Heatmap( z = f.apply(eval(arch_feat_norm),axis = norm_axis).values,
+                                y = f.index,
+                                x = f.columns
+                            ),
+                layout = go.Layout(xaxis={'type': 'category'},
+                                    yaxis={'type': 'category'}
+                                    )
+                    )
+        
+    
+ 
+# @app.callback(
+#     dash.dependencies.Output('example-graph-2', 'figure'),
+#     [dash.dependencies.Input('Cities', 'value')])
+# def update_graph_src(selector):
+#     data = []
+#     for city in selector:
+#         data.append({'x': city_data[city]['x'], 'y': city_data[city]['y'],
+#                     'type': 'line', 'name': city})
+#     figure = {
+#         'data': data,
+#         'layout': {
+#             'title': 'Graph 1',
+#             'xaxis' : dict(
+#                 title='x Axis',
+#                 titlefont=dict(
+#                 family='Courier New, monospace',
+#                 size=20,
+#                 color='#7f7f7f'
+#             )),
+#             'yaxis' : dict(
+#                 title='y Axis',
+#                 titlefont=dict(
+#                 family='Helvetica, monospace',
+#                 size=20,
+#                 color='#7f7f7f'
+#             ))
+#         }
+#     }
+    return figure
+
+
+
+
+
+#%%
+if __name__ == '__main__':
+    app.run_server(debug=True,port=8080)
+
+
